@@ -71,12 +71,12 @@ table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:12px;bor
 
 .player-chips{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;max-height:310px;overflow:auto;padding:2px}
 .player-chip,.def-btn{border:1px solid var(--line);background:#fff;color:var(--navy);border-radius:8px;padding:8px 6px;text-align:left;font-weight:800}
-.player-chip span{display:block;font-size:9px;color:var(--muted);font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
+.player-chip span{display:block;font-size:9px;color:var(--muted);font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}.player-chip em{display:block;font-size:8px;font-style:normal;color:var(--navy);font-weight:900;margin-top:2px}.player-chip.selected em{color:#fff;opacity:.8}
 .player-chip.selected,.def-btn.selected{background:var(--navy);color:#fff;border-color:var(--navy)}
 .player-chip.selected span{color:#fff;opacity:.8}
 .def-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
 @media(max-width:800px){.player-chips{grid-template-columns:repeat(3,minmax(0,1fr))}}
-</style>
+.field-action-note{margin-top:10px;text-align:center;color:#fff;font-size:11px;font-weight:800;opacity:.82;line-height:1.35}</style>
 </head>
 <body>
 <header class="topbar">
@@ -140,17 +140,17 @@ table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:12px;bor
 
 <script>
 const players=[
- {n:"#0",name:"Bryce Graham"},{n:"#1",name:"Mylan Griggs"},{n:"#2",name:"De'mari Hendrix"},
- {n:"#3",name:"Lamarcus Army"},{n:"#4",name:"Collin Sumpter"},{n:"#5",name:"Marquell Evans Jr."},
- {n:"#6",name:"Pierre Johnson"},{n:"#7",name:"Julian Taylor"},{n:"#8",name:"Donald Tabron II"},
- {n:"#9",name:"Anthony Foster"},{n:"#10",name:"Peyton Robinson"},{n:"#11",name:"Kaden Johnson"},
- {n:"#13",name:"William Welch"},{n:"#15",name:"Kaden Stringfellow"},{n:"#16",name:"Jamierre Johnson"},
- {n:"#17",name:"Jacob Stinson"},{n:"#17",name:"Landon Bryant"},{n:"#20",name:"Tailor Thomas"},
- {n:"#21",name:"Khamari Jones"},{n:"#22",name:"Tyler Barnett"},{n:"#23",name:"Isaih Leggett"},
- {n:"#25",name:"Justin McCallum"},{n:"#33",name:"Mark Brown"},{n:"#44",name:"Martez Livingston"},
- {n:"#45",name:"Braydin Kilgore"},{n:"#50",name:"Harold Medley"},{n:"#51",name:"Davis Green"},
- {n:"#54",name:"Trenton Lumpkins"},{n:"#55",name:"Antijuan Wilkes Jr."},{n:"#56",name:"Josh Baker"},
- {n:"#57",name:"Major Marion"},{n:"#93",name:"Antoine Hall"}
+ {n:"#0",name:"Bryce Graham",pos:"WR"},{n:"#1",name:"Mylan Griggs",pos:"QB"},{n:"#2",name:"De'mari Hendrix",pos:"RB"},
+ {n:"#3",name:"Lamarcus Army",pos:"WR"},{n:"#4",name:"Collin Sumpter",pos:"WR"},{n:"#5",name:"Marquell Evans Jr.",pos:"RB"},
+ {n:"#6",name:"Pierre Johnson",pos:"WR"},{n:"#7",name:"Julian Taylor",pos:"QB"},{n:"#8",name:"Donald Tabron II",pos:"QB"},
+ {n:"#9",name:"Anthony Foster",pos:"WR"},{n:"#10",name:"Peyton Robinson",pos:"WR"},{n:"#11",name:"Kaden Johnson",pos:"WR"},
+ {n:"#13",name:"William Welch",pos:"TE"},{n:"#15",name:"Kaden Stringfellow",pos:"WR"},{n:"#16",name:"Jamierre Johnson",pos:"RB"},
+ {n:"#17",name:"Jacob Stinson",pos:"WR"},{n:"#17",name:"Landon Bryant",pos:"WR"},{n:"#20",name:"Tailor Thomas",pos:"RB"},
+ {n:"#21",name:"Khamari Jones",pos:"RB"},{n:"#22",name:"Tyler Barnett",pos:"RB"},{n:"#23",name:"Isaih Leggett",pos:"WR"},
+ {n:"#25",name:"Justin McCallum",pos:"RB"},{n:"#33",name:"Mark Brown",pos:"TE"},{n:"#44",name:"Martez Livingston",pos:"WR"},
+ {n:"#45",name:"Braydin Kilgore",pos:"TE"},{n:"#50",name:"Harold Medley",pos:"OL"},{n:"#51",name:"Davis Green",pos:"OL"},
+ {n:"#54",name:"Trenton Lumpkins",pos:"OL"},{n:"#55",name:"Antijuan Wilkes Jr.",pos:"OL"},{n:"#56",name:"Josh Baker",pos:"DL"},
+ {n:"#57",name:"Major Marion",pos:"LB"},{n:"#93",name:"Antoine Hall",pos:"DL"}
 ];
 let games=JSON.parse(localStorage.getItem("ct_games")||"null")||[
  {id:"g1",date:"2026-08-28",opp:"Detroit King",loc:"Away",cass:0,oppScore:0},
@@ -161,7 +161,11 @@ let plays=JSON.parse(localStorage.getItem("ct_plays")||"[]");
 let type="run", startY=15, endY=15;
 const save=()=>{localStorage.setItem("ct_games",JSON.stringify(games));localStorage.setItem("ct_plays",JSON.stringify(plays));};
 
-function playerOptions(blank=true){return (blank?'<option value="">Select player</option>':'')+players.map(p=>`<option value="${p.n}|${p.name}">${p.n} ${p.name}</option>`).join("")}
+function playerOptions(blank=true, allowedPositions=null){
+ const roster = allowedPositions ? players.filter(p=>allowedPositions.includes(p.pos)) : players;
+ return (blank?'<option value="">Select player</option>':'')+
+ roster.map(p=>`<option value="${p.n}|${p.name}">${p.n} ${p.name}${p.pos?` · ${p.pos}`:""}</option>`).join("");
+}
 function renderSchedule(){
  let wins=games.filter(g=>g.cass>g.oppScore).length,loss=games.filter(g=>g.cass<g.oppScore).length;
  document.getElementById("record").textContent=`${wins}–${loss}`;
@@ -187,7 +191,7 @@ function renderField(){
  <div class="endzone ez-top">OPP END ZONE</div><div class="endzone ez-bottom">CASS TECH END ZONE</div>
  <span class="yl y15">15</span><span class="yl y20">20</span><span class="yl y30">30</span><span class="yl y40">40</span><span class="yl y50">50</span><span class="yl y60">40</span><span class="yl y70">30</span><span class="yl y80">20</span><span class="yl y90">10</span>
  <div class="ball" id="startBall"></div><div class="ball endball" id="endBall"></div></div>
- <div class="yards" id="yards"></div></div>`;
+ <div class="field-action-note">Drag the football to set the play location. Yardage is calculated when the play is logged.</div></div>`;
  positionBalls(); enableDrag(document.getElementById("startBall"),true);enableDrag(document.getElementById("endBall"),false);
 }
 function yardToPct(y){return 100-(y/100*100)}
@@ -195,7 +199,7 @@ function pctToY(p){return Math.max(0,Math.min(100,Math.round((100-p)*100/5)*5))}
 function positionBalls(){
  let a=document.getElementById("startBall"),b=document.getElementById("endBall"); if(!a)return;
  a.style.left="50%";a.style.top=yardToPct(startY)+"%"; b.style.left="50%";b.style.top=yardToPct(endY)+"%";
- updateYards();
+ updatePreview();
 }
 function enableDrag(el,isStart){
  const field=()=>document.getElementById("field");
@@ -205,40 +209,7 @@ function enableDrag(el,isStart){
  };
  el.onpointerdown=e=>{el.setPointerCapture(e.pointerId);el.onpointermove=move;el.onpointerup=()=>{el.onpointermove=null};}
 }
-function updateYards(){
- let y=endY-startY;
- document.getElementById("yards").innerHTML=type==="pass"?(y>=0?`+${y}`:y)+` <small>yards to catch</small>`:((y>=0?"+":"")+y)+` <small>yards</small>`;
- updatePreview();
-}
-let rosterSelections={runner:null,passer:null,receiver:null,specialPlayer:null,penPlayer:null};
-
-function rosterPicker(role,label,multi=false){
- return `<label>${label}</label><div class="player-chips role-picker" data-role="${role}" data-multi="${multi}">`+
- players.map((p,i)=>`<button type="button" class="player-chip ${multi?"":"single-chip"}" data-player="${i}" data-role="${role}"><strong>${p.n}</strong><span>${p.name}</span></button>`).join("")+
- `</div>`;
-}
-function wireRosterPickers(){
- document.querySelectorAll('.role-picker[data-role="penPlayer"] .player-chip[data-player="-1"]').forEach(b=>{b.classList.add("selected");rosterSelections.penPlayer=-1;});
- document.querySelectorAll(".role-picker .player-chip").forEach(b=>b.onclick=()=>{
-   const role=b.dataset.role, multi=b.parentElement.dataset.multi==="true";
-   if(!multi){
-     b.parentElement.querySelectorAll(".player-chip").forEach(x=>x.classList.remove("selected"));
-     rosterSelections[role]=Number(b.dataset.player);
-   }
-   b.classList.toggle("selected",multi?!b.classList.contains("selected"):true);
-   if(multi) rosterSelections[role]=[...b.parentElement.querySelectorAll(".player-chip.selected")].map(x=>Number(x.dataset.player));
-   updatePreview();
- });
-}
-function chosenPlayer(role){
- const v=rosterSelections[role];
- if(Array.isArray(v)) return v.map(i=>players[i]);
- if(v===-1) return {n:"TEAM",name:"Team"};
- return v===null||v===undefined?null:players[v];
-}
-function clearRosterSelections(){
- rosterSelections={runner:null,passer:null,receiver:null,specialPlayer:null,penPlayer:null};
-}
+function updateYards(){ updatePreview(); }
 function controls(){
  const dc=document.getElementById("dynamicControls");
  clearRosterSelections();
@@ -269,7 +240,7 @@ function controls(){
 }
 function renderPlayerChips(){
  const box=document.getElementById("tackleChips"); if(!box)return;
- box.innerHTML=players.map((p,i)=>`<button type="button" class="player-chip" data-player="${i}"><strong>${p.n}</strong><span>${p.name}</span></button>`).join("");
+ box.innerHTML=players.map((p,i)=>`<button type="button" class="player-chip" data-player="${i}"><strong>${p.n}</strong><span>${p.name}</span><em>${p.pos||""}</em></button>`).join("");
  box.querySelectorAll(".player-chip").forEach(b=>b.onclick=()=>b.classList.toggle("selected"));
 }
 function wireDefButtons(){
@@ -335,13 +306,52 @@ function logPlay(){
 function renderPlayLog(){
  let gid=document.getElementById("gameSelect")?.value;let arr=plays.filter(p=>p.game===gid);
  document.getElementById("playCount").textContent=`${arr.length} play${arr.length===1?"":"s"}`;
- document.getElementById("playLog").innerHTML=arr.length?`<table><thead><tr><th>Q</th><th>Side</th><th>Type</th><th>Player / Defense</th><th>Yards</th><th></th></tr></thead><tbody>${arr.map(p=>{
+ document.getElementById("playLog").innerHTML=arr.length?`<table><thead><tr><th>Q</th><th>Side</th><th>Type</th><th>Player / Defense</th><th>Yards / Result</th><th></th></tr></thead><tbody>${arr.map(p=>{
  let player=p.side==="opponent" ? "Opponent" : p.type==="run"?p.runner:p.type==="pass"?`${p.passer} → ${p.receiver}`:p.type==="penalty"?p.player:p.player;
- let defense=p.tacklers?.length?`T: ${p.tacklers.map(x=>x.split("|")[0]).join(", ")}`:"";
+ let defense=p.tacklers?.length?`Tackles: ${p.tacklers.map(x=>x.split("|")[0]).join(", ")}`:"";
  if(p.defense?.length) defense += `${defense?" · ":""}${p.defense.map(x=>({sack:"Sack",int:"INT",pbu:"PBU",ff:"FF",fr:"FR"}[x]||x)).join(", ")}`;
  let result=p.type==="penalty"?`${p.penalty} (${p.penYards} yds)`:p.type==="special"?`${p.special} · ${p.yards} yds`:p.side==="opponent"?`${p.yards>=0?"+":""}${p.yards} yds`:p.type==="pass"?`${p.result} · ${p.yards} yds`:`${p.yards>=0?"+":""}${p.yards} yds`;
- return `<tr><td>${p.q}</td><td><span class="badge">${p.side==="opponent"?"Opponent":"Cass"}</span></td><td><span class="badge">${p.type}</span></td><td>${player||"—"}${defense?`<div class="muted" style="font-size:11px;margin-top:4px">${defense}</div>`:""}</td><td>${result}</td><td><button class="btn danger" onclick="deletePlay('${p.id}')">Delete</button></td></tr>`}).join("")}</tbody></table>`:'<div class="empty">No plays logged for this game.</div>';
+ return `<tr><td>${p.q}</td><td><span class="badge">${p.side==="opponent"?"Opponent":"Cass"}</span></td><td><span class="badge">${p.type}</span></td><td>${player||"—"}${defense?`<div class="muted" style="font-size:11px;margin-top:4px">${defense}</div>`:""}</td><td>${result}</td><td><button class="btn ghost" onclick="editPlay('${p.id}')">Edit</button> <button class="btn danger" onclick="deletePlay('${p.id}')">Delete</button></td></tr>`}).join("")}</tbody></table>`:'<div class="empty">No plays logged for this game.</div>';
 }
+
+function editPlay(id){
+ const p=plays.find(x=>x.id===id); if(!p)return;
+ const runner=p.runner?.split("|")[0]||"";
+ const passer=p.passer?.split("|")[0]||"";
+ const receiver=p.receiver?.split("|")[0]||"";
+ const side=p.side||"cass";
+ const newQ=prompt("Quarter (1, 2, 3, 4, OT)",p.q); if(newQ===null)return;
+ p.q=newQ;
+ if(p.type==="run" && side==="cass"){
+   const choices=players.filter(x=>["QB","RB","WR","TE"].includes(x.pos)).map(x=>`${x.n} ${x.name}`).join("\\n");
+   const val=prompt("Runner jersey number:\\n\\n"+choices,runner.replace("#","")); if(val===null)return;
+   const found=players.find(x=>x.n===("#"+val.trim())||x.n===val.trim());
+   if(!found)return alert("Player not found.");
+   p.runner=`${found.n}|${found.name}`;
+ }
+ if(p.type==="pass" && side==="cass"){
+   let val=prompt("Passer jersey number (QB only)",passer.replace("#","")); if(val===null)return;
+   let found=players.find(x=>x.n===("#"+val.trim())&&x.pos==="QB"); if(!found)return alert("QB not found.");
+   p.passer=`${found.n}|${found.name}`;
+   val=prompt("Receiver jersey number (WR/RB/TE)",receiver.replace("#","")); if(val===null)return;
+   found=players.find(x=>x.n===("#"+val.trim())&&["WR","RB","TE"].includes(x.pos)); if(!found)return alert("Receiver not found.");
+   p.receiver=`${found.n}|${found.name}`;
+ }
+ if(side==="opponent" && (p.type==="run"||p.type==="pass"||p.type==="special")){
+   const val=prompt("Yards gained/lost by opponent",p.yards); if(val===null)return;
+   p.yards=Number(val)||0;
+   const t=prompt("Tackler jersey numbers, comma-separated",p.tacklers?.map(x=>x.split("|")[0].replace("#","")).join(", ")||"");
+   if(t!==null){
+     p.tacklers=t.split(",").map(s=>s.trim()).filter(Boolean).map(n=>players.find(x=>x.n===("#"+n)||x.n===n)).filter(Boolean).map(x=>`${x.n}|${x.name}`);
+   }
+ }
+ if(p.type!=="penalty" && p.type!=="special"){
+   const st=prompt("Starting yard line",p.start); if(st!==null)p.start=Number(st)||0;
+   const en=prompt("Ending yard line",p.end); if(en!==null){p.end=Number(en)||0;p.yards=p.end-p.start;}
+ }
+ save();renderPlayLog();renderStats();
+}
+
 function deletePlay(id){if(confirm("Delete this play?")){plays=plays.filter(p=>p.id!==id);save();renderAll()}}
 function stats(){
  let out={}; players.forEach((x,i)=>out[i]={num:x.n,name:x.name,cmp:0,att:0,passY:0,car:0,rushY:0,rec:0,recY:0,tack:0,sack:0,int:0,pbu:0,ff:0,fr:0});
