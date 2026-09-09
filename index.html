@@ -76,6 +76,8 @@ table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:12px;bor
  .navbtn{flex:1;padding:11px 8px;font-size:14px;text-align:center}
  main{padding:18px 12px 100px}.grid2,.grid3,.play-layout{grid-template-columns:1fr}.statgrid{grid-template-columns:repeat(2,1fr)}
  .play-layout{display:flex;flex-direction:column}.controls{order:1}.field-card{order:2}
+.field-log-btn{width:100%;margin-top:16px;min-height:48px;font-size:16px;font-weight:800}
+
  .type-grid{grid-template-columns:repeat(2,1fr)}.field{height:180px;min-height:170px}
  h2{font-size:26px;margin-top:2px}.sub{font-size:16px}.desktop-only{display:none}.mobile-only{display:block}
  .hero{padding:20px 18px;min-height:142px}.hero .score{font-size:48px}.hero:after{font-size:105px;right:12px}
@@ -171,11 +173,11 @@ table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:12px;bor
         <button class="type-btn" data-type="penalty">Penalty</button>
       </div>
       <div id="dynamicControls"></div>
-      <button class="btn primary" style="width:100%;margin-top:14px" onclick="logPlay()">Log Play</button>
       <div id="preview" class="play-preview"></div>
     </div>
     <div class="card pad field-card">
       <div id="fieldUI"></div>
+      <button class="btn primary field-log-btn" onclick="logPlay()">Log Play</button>
     </div>
   </div>
   <div class="card pad" style="margin-top:16px">
