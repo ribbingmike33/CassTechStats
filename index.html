@@ -17,15 +17,15 @@
 body{margin:0;background:var(--bg);font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:var(--ink)}
 button,input,select{font:inherit}
 button{cursor:pointer}
-.topbar{background:linear-gradient(135deg,var(--navy),var(--navy2));color:#fff;padding:18px max(18px,calc((100vw - 1180px)/2));position:sticky;top:0;z-index:20;box-shadow:0 2px 12px #001a2b2b}
-.brand{display:flex;align-items:center;gap:13px}
+.topbar{background:linear-gradient(135deg,var(--navy),var(--navy2));color:#fff;padding:16px max(18px,calc((100vw - 1180px)/2));position:sticky;top:0;z-index:20;box-shadow:0 2px 12px #003b2c22}
+.brand{display:flex;align-items:center;gap:13px;min-width:0}
 .mark{width:42px;height:42px;border:2px solid var(--gold);border-radius:8px;display:grid;place-items:center;font-weight:900;color:#fff;letter-spacing:-1px}
-.brand h1{font-size:18px;margin:0}.brand p{font-size:11px;margin:2px 0 0;opacity:.78;text-transform:uppercase;letter-spacing:1.4px}
+.brand h1{font-size:18px;line-height:1.15;margin:0}.brand p{font-size:11px;margin:4px 0 0;opacity:.82;text-transform:uppercase;letter-spacing:1.4px}
 nav{max-width:1180px;margin:0 auto;padding:12px 18px;display:flex;gap:8px;overflow:auto;scrollbar-width:none}
 nav::-webkit-scrollbar{display:none}
 .navbtn{white-space:nowrap;border:0;background:transparent;color:#526476;padding:10px 14px;border-radius:9px;font-weight:750}
 .navbtn.active{background:var(--navy);color:#fff}
-main{max-width:1180px;margin:0 auto;padding:20px 18px 60px}
+main{max-width:1180px;margin:0 auto;padding:24px 18px 88px}
 .page{display:none}.page.active{display:block}
 h2{margin:4px 0 4px;font-size:28px}.sub{color:var(--muted);margin:0 0 20px}
 .card{background:var(--card);border:1px solid var(--line);border-radius:14px;box-shadow:0 2px 8px #1022350a}
@@ -44,7 +44,7 @@ select:focus,input:focus{border-color:var(--navy)}
 .stat{background:#F1F8F5;border:1px solid var(--line);border-radius:10px;padding:14px}.stat b{font-size:24px;display:block}.stat span{font-size:11px;text-transform:uppercase;color:var(--muted);font-weight:800}
 table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:12px;border-bottom:1px solid var(--line);font-size:13px}th{font-size:11px;text-transform:uppercase;color:var(--muted);letter-spacing:.4px;background:#EAF4F0}tr:last-child td{border-bottom:0}
 .badge{display:inline-block;border-radius:999px;padding:4px 8px;font-size:10px;font-weight:900;text-transform:uppercase;background:#edf3f8;color:var(--navy)}
-.hero{background:linear-gradient(135deg,#062a4d,#0b477c);color:#fff;border-radius:16px;padding:22px;margin-bottom:16px}
+.hero{background:linear-gradient(135deg,#eaf6f1,#d7eee5);color:#17352A;border:1px solid #bfd8ce;border-radius:16px;padding:22px;margin-bottom:16px;position:relative;overflow:hidden}.hero:after{content:"CT";position:absolute;right:24px;top:50%;transform:translateY(-50%);font-size:120px;font-weight:950;line-height:1;color:#006B4F12;letter-spacing:-12px}.hero .score,.hero small{position:relative;z-index:1}.hero small{opacity:.78}.hero .score{color:#006B4F}
 .hero .score{font-size:40px;font-weight:950;letter-spacing:-1px}.hero small{opacity:.7;text-transform:uppercase;font-weight:800}
 .play-layout{display:grid;grid-template-columns:340px 1fr;gap:16px}
 .type-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin-bottom:16px}
@@ -65,11 +65,25 @@ table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:12px;bor
 .row{display:flex;align-items:center;justify-content:space-between;gap:10px}
 .muted{color:var(--muted)}.empty{padding:30px;text-align:center;color:var(--muted)}
 .mobile-only{display:none}
+.bottom-nav{display:none}
 @media(max-width:800px){
- main{padding:16px 12px 40px}.grid2,.grid3,.play-layout{grid-template-columns:1fr}.statgrid{grid-template-columns:repeat(2,1fr)}
+ .topbar{padding:calc(12px + env(safe-area-inset-top)) 14px 14px}
+ .brand{gap:10px;align-items:center}
+ .mark.actual-logo{width:56px;height:56px;flex:0 0 56px;padding:4px}
+ .brand h1{font-size:17px;line-height:1.12;white-space:normal}
+ .brand p{font-size:10px;letter-spacing:1.1px;margin-top:4px}
+ nav{padding:10px 10px 12px;gap:4px;justify-content:space-between}
+ .navbtn{flex:1;padding:11px 8px;font-size:14px;text-align:center}
+ main{padding:18px 12px 100px}.grid2,.grid3,.play-layout{grid-template-columns:1fr}.statgrid{grid-template-columns:repeat(2,1fr)}
  .play-layout{display:flex;flex-direction:column}.controls{order:1}.field-card{order:2}
  .type-grid{grid-template-columns:repeat(2,1fr)}.field{height:62vh;min-height:390px}
- h2{font-size:24px}.desktop-only{display:none}.mobile-only{display:block}
+ h2{font-size:26px;margin-top:2px}.sub{font-size:16px}.desktop-only{display:none}.mobile-only{display:block}
+ .hero{padding:20px 18px;min-height:142px}.hero .score{font-size:48px}.hero:after{font-size:105px;right:12px}
+ .card.pad{padding:16px}
+ .bottom-nav{position:fixed;left:0;right:0;bottom:0;display:grid;grid-template-columns:repeat(5,1fr);height:72px;padding:7px 6px calc(7px + env(safe-area-inset-bottom));background:rgba(255,255,255,.98);border-top:1px solid #bfd8ce;box-shadow:0 -4px 16px #003b2c12;z-index:50}
+ .bottom-nav button{border:0;background:transparent;color:#526476;font-size:10px;font-weight:800;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px}
+ .bottom-nav button.active{color:#006B4F}
+ .bottom-nav .bn-icon{font-size:22px;line-height:1}
 }
 
 .player-chips{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;max-height:310px;overflow:auto;padding:2px}
@@ -99,6 +113,14 @@ table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:12px;bor
   <button class="navbtn" data-page="season">Season Stats</button>
   <button class="navbtn" data-page="log">Log Stats</button>
 </nav>
+
+<div class="bottom-nav" id="bottomNav">
+  <button class="active" data-page="schedule"><span class="bn-icon">▣</span>Schedule</button>
+  <button data-page="season"><span class="bn-icon">▥</span>Season Stats</button>
+  <button data-page="log"><span class="bn-icon">⊕</span>Log Stats</button>
+  <button data-page="roster"><span class="bn-icon">♙</span>Roster</button>
+  <button data-page="more"><span class="bn-icon">•••</span>More</button>
+</div>
 
 <main>
 <section id="schedule" class="page active">
@@ -450,7 +472,14 @@ function renderStats(){
 }
 function renderAll(){renderSchedule();renderGameSelect();controls();renderField();renderPlayLog();renderStats();}
 
-document.querySelectorAll(".navbtn").forEach(b=>b.onclick=()=>{document.querySelectorAll(".navbtn").forEach(x=>x.classList.remove("active"));b.classList.add("active");document.querySelectorAll(".page").forEach(x=>x.classList.remove("active"));document.getElementById(b.dataset.page).classList.add("active");});
+function showPage(id){
+  if(!["schedule","season","log"].includes(id)) return;
+  document.querySelectorAll(".navbtn").forEach(x=>x.classList.toggle("active",x.dataset.page===id));
+  document.querySelectorAll(".bottom-nav button").forEach(x=>x.classList.toggle("active",x.dataset.page===id));
+  document.querySelectorAll(".page").forEach(x=>x.classList.remove("active"));
+  document.getElementById(id).classList.add("active");
+}
+document.querySelectorAll(".navbtn,.bottom-nav button").forEach(b=>b.onclick=()=>showPage(b.dataset.page));
 document.querySelectorAll(".type-btn").forEach(b=>b.onclick=()=>{document.querySelectorAll(".type-btn").forEach(x=>x.classList.remove("active"));b.classList.add("active");type=b.dataset.type;controls();renderField();});
 document.querySelectorAll(".tab").forEach(b=>b.onclick=()=>{document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active"));b.classList.add("active");document.getElementById("individualStats").style.display=b.dataset.stab==="individual"?"block":"none";document.getElementById("teamStats").style.display=b.dataset.stab==="team"?"block":"none";});
 document.getElementById("gameSelect").onchange=renderPlayLog;
