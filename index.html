@@ -540,7 +540,7 @@ function renderField(){
      <div class="yard-control-head"><strong>End Yard Line</strong><span class="yard-value" id="endYardValue">${yardLineLabel(endY)}</span></div>
      <input class="yard-range" id="endYardRange" type="range" min="0" max="100" step="1" value="${endY}" ${fieldFlipped?'dir="rtl"':''} oninput="setYard('end',this.value)">
      <div class="yard-ticks"><span>0</span><span>10</span><span>20</span><span>30</span><span>40</span><span>50</span><span>40</span><span>30</span><span>20</span><span>10</span><span>0</span></div>
-     <div class="yard-buttons">${((possession==='cass')!==fieldFlipped)?`<button type="button" onclick="adjustYard('end',-5)">−5</button><button type="button" onclick="adjustYard('end',-1)">−1</button><button type="button" onclick="adjustYard('end',1)">+1</button><button type="button" onclick="adjustYard('end',5)">+5</button>`:`<button type="button" onclick="adjustYard('end',5)">+5</button><button type="button" onclick="adjustYard('end',1)">+1</button><button type="button" onclick="adjustYard('end',-1)">−1</button><button type="button" onclick="adjustYard('end',-5)">−5</button>`}</div>
+     <div class="yard-buttons"><button type="button" onclick="adjustYard('end',5)">+5</button><button type="button" onclick="adjustYard('end',1)">+1</button><button type="button" onclick="adjustYard('end',-1)">−1</button><button type="button" onclick="adjustYard('end',-5)">−5</button></div>
    </div>
  </div>
  </div>`;
@@ -570,8 +570,14 @@ function setYard(which,value){
   saveLiveState(); positionBalls();
 }
 function adjustYard(which,delta){
-  const current=which==='start'?startY:endY;
-  setYard(which,current+delta);
+  if(which==='start') return;
+  const current=endY;
+  const possession=document.getElementById('possession')?.value||lastPossession||'cass';
+  // Buttons always mean football yardage: +1/+5 moves the ball forward
+  // for the team in possession, regardless of the absolute field coordinate.
+  // Cass drives toward 100; the opponent drives toward 0.
+  const coordinateDelta=possession==='cass'?Number(delta):-Number(delta);
+  setYard('end',current+coordinateDelta);
 }
 function positionBalls(){
  let a=document.getElementById("startBall"),b=document.getElementById("endBall"); if(!a)return;
@@ -705,6 +711,9 @@ function syncFieldToLatestPlay(gid){
    const sel=document.getElementById('possession');
    if(sel) sel.value=latest.nextPossession;
    lastPossession=latest.nextPossession;
+   // Visual direction follows the team that now has the ball.
+   // This is display-only; playGain() always uses absolute coordinates.
+   fieldFlipped=latest.nextPossession==='opponent';
  }
 }
 function controls(){
@@ -941,6 +950,9 @@ function logPlay(){
  if(switchPossession){
    const next=possession==="cass"?"opponent":"cass";p.nextPossession=next;p.nextStart=endY;p.nextDown=1;p.nextDistance=10;
    lastPossession=next;const pe=document.getElementById("possession");if(pe)pe.value=next;
+   // Keep the visual field direction aligned with the new offense. This is
+   // display-only; absolute field coordinates and yardage never depend on it.
+   fieldFlipped=next==='opponent';
    startY=Number.isFinite(Number(p.nextStart))?Number(p.nextStart):endY;endY=startY;
  }else{startY=p.nextStart;endY=startY;}
  plays.unshift(p);save();syncFieldToLatestPlay(game);renderPlayLog();renderStats();renderCurrentGame();controls();renderField();
@@ -1194,6 +1206,7 @@ function syncStartFromGame(){
     startY=Number.isFinite(Number(latest.nextStart))?Number(latest.nextStart):35;endY=startY;
     if(latest.nextPossession)lastPossession=latest.nextPossession;
     const pe=document.getElementById('possession');if(pe)pe.value=lastPossession;
+    fieldFlipped=lastPossession==='opponent';
   }else{startY=35;endY=35;fieldFlipped=false;type='special';lastPossession='cass';const pe=document.getElementById('possession');if(pe)pe.value='cass';document.querySelectorAll('.type-btn').forEach(b=>b.classList.toggle('active',b.dataset.type==='special'));}
   saveLiveState();
 }
@@ -1233,6 +1246,9 @@ document.getElementById("gameSelect").onchange=()=>{
 document.getElementById("possession").onchange=()=>{
   const next=document.getElementById("possession").value;
   lastPossession=next;
+  // Keep the field visually oriented toward the current offense.
+  // Yardage calculations remain independent of this display flag.
+  fieldFlipped=next==='opponent';
   saveLiveState();
   controls();renderField();
 };
