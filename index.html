@@ -95,6 +95,7 @@ table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:12px;bor
 .player-chip.selected span{color:#fff;opacity:.8}
 .def-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
 @media(max-width:800px){.player-chips{grid-template-columns:repeat(3,minmax(0,1fr))}}
+.roster-grid{max-height:none}.modal{display:none;position:fixed;inset:0;z-index:100}.modal.open{display:block}.modal-backdrop{position:absolute;inset:0;background:#002c224d}.modal-card{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(680px,calc(100vw - 24px));max-height:88vh;overflow:auto;background:#fff;border:1px solid var(--line);border-radius:16px;box-shadow:0 20px 60px #002c2240;padding:18px}.modal-head{font-size:20px;margin-bottom:14px}.modal-close{border:0;background:#EAF4F0;color:var(--navy);width:36px;height:36px;border-radius:50%;font-size:24px;line-height:1}.modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:18px;padding-top:14px;border-top:1px solid var(--line)}.edit-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.edit-grid .full{grid-column:1/-1}.edit-yards{display:grid;grid-template-columns:1fr 1fr;gap:10px}.edit-checks{display:flex;flex-wrap:wrap;gap:7px}.edit-checks label{margin:0;text-transform:none;letter-spacing:0;background:#EAF4F0;border:1px solid var(--line);border-radius:8px;padding:8px 10px;color:var(--ink);font-size:12px}.edit-checks input{width:auto;margin-right:5px}.td-actions{white-space:nowrap}@media(max-width:800px){.edit-grid{grid-template-columns:1fr}.edit-grid .full{grid-column:auto}.modal-card{top:calc(50% + env(safe-area-inset-top)/2)}}
 .field-flip{display:flex;justify-content:flex-end;margin-bottom:8px}.field-flip button{padding:8px 12px;border:1px solid #ffffff88;background:#ffffff18;color:#fff;border-radius:8px;font-size:11px;font-weight:900}.field-action-note{margin-top:10px;text-align:center;color:#fff;font-size:11px;font-weight:800;opacity:.82;line-height:1.35}
 
 .yard-controls{display:grid;gap:10px;margin-top:12px}
@@ -185,7 +186,26 @@ table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:12px;bor
     <div id="playLog" style="margin-top:10px"></div>
   </div>
 </section>
+
+<section id="roster" class="page">
+  <h2>Roster</h2><p class="sub">2026 Cass Tech Football</p>
+  <div class="card pad"><div class="player-chips roster-grid" id="rosterGrid"></div></div>
+</section>
+
+<section id="more" class="page">
+  <h2>More</h2><p class="sub">Cass Tech Stats</p>
+  <div class="card pad"><strong>Technicians Football</strong><p class="muted">Game logging, season statistics and roster tools.</p></div>
+</section>
 </main>
+
+<div id="editModal" class="modal" aria-hidden="true">
+  <div class="modal-backdrop" onclick="closeEdit()"></div>
+  <div class="modal-card">
+    <div class="row modal-head"><strong>Edit Play</strong><button type="button" class="modal-close" onclick="closeEdit()">×</button></div>
+    <div id="editForm"></div>
+    <div class="modal-actions"><button type="button" class="btn ghost" onclick="closeEdit()">Cancel</button><button type="button" class="btn primary" onclick="saveEdit()">Save Changes</button></div>
+  </div>
+</div>
 
 <script>
 const players=[
@@ -309,10 +329,13 @@ function enableDrag(el,isStart){
 function updateYards(){ updatePreview(); }
 function eligiblePlayers(role){
   const pos=p=>String(p.pos||'').split(/[,/]/).map(x=>x.trim().toUpperCase());
-  if(role==='passer') return players.filter(p=>pos(p).includes('QB'));
-  if(role==='runner') return players.filter(p=>pos(p).some(x=>['QB','RB','WR','TE'].includes(x)));
-  if(role==='receiver') return players.filter(p=>pos(p).some(x=>['RB','WR','TE'].includes(x)));
-  return players;
+  let list=[];
+  if(role==='passer') list=players.filter(p=>pos(p).includes('QB'));
+  else if(role==='runner') list=players.filter(p=>pos(p).some(x=>['QB','RB','WR','TE'].includes(x)));
+  else if(role==='receiver') list=players.filter(p=>pos(p).some(x=>['RB','WR','TE'].includes(x)));
+  else list=players.slice();
+  const priority={passer:['#8'],runner:['#7','#2'],receiver:['#1','#10','#7','#2']}[role]||[];
+  return list.sort((a,b)=>{const ai=priority.indexOf(a.n),bi=priority.indexOf(b.n);return (ai<0?999:ai)-(bi<0?999:bi)});
 }
 function rosterPicker(role,label,multi=false){
   const roster=eligiblePlayers(role);
@@ -358,7 +381,8 @@ function controls(){
     : `${rosterPicker("specialPlayer","Player")}<div style="margin-top:12px"><label>Special Teams Play</label><select id="specialType"><option>Punt</option><option>Kickoff</option><option>Field Goal</option><option>Extra Point</option><option>Punt Return</option><option>Kick Return</option><option>Blocked Kick</option></select></div>`;
  }
  if(type==="penalty"){
-   dc.innerHTML=`<div><label>Player / Team</label><div class="player-chips role-picker" data-role="penPlayer" data-multi="false"><button type="button" class="player-chip selected single-chip" data-player="-1" data-role="penPlayer"><strong>TEAM</strong><span>Team</span></button>${players.map((p,i)=>`<button type="button" class="player-chip single-chip" data-player="${i}" data-role="penPlayer"><strong>${p.n}</strong><span>${p.name}</span></button>`).join("")}</div></div><div style="margin-top:12px"><label>Penalty Yards</label><input id="penYards" type="number" value="10" min="0" max="50"></div></div><div style="margin-top:12px"><label>Penalty</label><select id="penType"><option>Holding</option><option>False Start</option><option>Offside</option><option>Pass Interference</option><option>Personal Foul</option><option>Unsportsmanlike Conduct</option><option>Delay of Game</option><option>Other</option></select>`;
+   dc.innerHTML=`<div><label>Player / Team</label><div class="player-chips role-picker" data-role="penPlayer" data-multi="false"><button type="button" class="player-chip selected single-chip" data-player="-1" data-role="penPlayer"><strong>TEAM</strong><span>Team</span></button>${players.map((p,i)=>`<button type="button" class="player-chip single-chip" data-player="${i}" data-role="penPlayer"><strong>${p.n}</strong><span>${p.name}</span></button>`).join("")}</div></div><div style="margin-top:12px"><label>Penalty Yards</label><div class="type-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:8px"><button type="button" class="type-btn pen-preset" data-yards="5">5</button><button type="button" class="type-btn pen-preset active" data-yards="10">10</button><button type="button" class="type-btn pen-preset" data-yards="15">15</button></div><input id="penYards" type="number" value="10" min="0" max="100" step="1" placeholder="Custom yards"></div><div style="margin-top:12px"><label>Penalty</label><select id="penType"><option>Holding</option><option>False Start</option><option>Offside</option><option>Pass Interference</option><option>Personal Foul</option><option>Unsportsmanlike Conduct</option><option>Delay of Game</option><option>Other</option></select>`;
+   document.querySelectorAll('.pen-preset').forEach(b=>b.onclick=()=>{document.querySelectorAll('.pen-preset').forEach(x=>x.classList.remove('active'));b.classList.add('active');document.getElementById('penYards').value=b.dataset.yards;updatePreview();});
  }
  if(!opp && (type==="run" || type==="pass")) renderPlayerChips();
  wireDefButtons();
@@ -411,7 +435,7 @@ function logPlay(){
  let game=document.getElementById("gameSelect").value,q=document.getElementById("quarter").value;
  const possession=document.getElementById("possession").value;
  if(!game)return alert("Select a game.");
- let p={id:"p"+Date.now(),game,q,type,side:possession,start:startY,end:endY,yards:endY-startY,defense:[],tacklers:[]};
+ let p={id:"p"+Date.now(),game,q,type,side:possession,start:startY,end:endY,yards:endY-startY,defense:[],tacklers:[],touchdown:false};
  if(possession==="opponent"){
    if(type==="run"||type==="pass"||type==="special"){
      p.yards=Number(document.getElementById("oppYards")?.value||0);
@@ -423,62 +447,80 @@ function logPlay(){
      p.penalty=selected("penType");p.penPlayer=selected("penPlayer");p.penYards=Number(document.getElementById("penYards").value)||0;p.yards=0;
    }
  } else {
-   if(type==="run"){let x=chosenPlayer("runner");p.runner=x?`${x.n}|${x.name}`:"";if(!p.runner)return alert("Select a runner.");}
-   if(type==="pass"){let q=chosenPlayer("passer"),r=chosenPlayer("receiver");p.passer=q?`${q.n}|${q.name}`:"";p.receiver=r?`${r.n}|${r.name}`:"";p.result=selected("passResult");if(!p.passer||!p.receiver)return alert("Select passer and receiver.");if(p.result!=="Complete")p.yards=0;}
+   if(type==="run"){
+     let x=chosenPlayer("runner");p.runner=x?`${x.n}|${x.name}`:"";if(!p.runner)return alert("Select a runner.");
+     p.touchdown=fieldFlipped ? endY===0 : endY===100;
+   }
+   if(type==="pass"){
+     let q=chosenPlayer("passer"),r=chosenPlayer("receiver");p.passer=q?`${q.n}|${q.name}`:"";p.receiver=r?`${r.n}|${r.name}`:"";p.result=selected("passResult");
+     if(!p.passer||!p.receiver)return alert("Select passer and receiver.");
+     if(p.result!=="Complete")p.yards=0; else p.touchdown=fieldFlipped ? endY===0 : endY===100;
+   }
    if(type==="special"){p.special=selected("specialType");let x=chosenPlayer("specialPlayer");p.player=x?`${x.n}|${x.name}`:"";}
    if(type==="penalty"){p.penalty=selected("penType");let x=chosenPlayer("penPlayer");p.player=x?`${x.n}|${x.name}`:"TEAM|Team";p.penYards=Number(document.getElementById("penYards").value)||0;p.yards=0;}
  }
- plays.unshift(p);save();renderPlayLog();renderStats();alert("Play logged.");
+ plays.unshift(p);save();renderPlayLog();renderStats();
+ // The next play starts wherever this play ended. Preserve touchdown at the goal line.
+ if(type!=="penalty" && type!=="special" && possession==="cass") { startY=endY; endY=endY; }
+ renderField();
 }
 function renderPlayLog(){
  let gid=document.getElementById("gameSelect")?.value;let arr=plays.filter(p=>p.game===gid);
  document.getElementById("playCount").textContent=`${arr.length} play${arr.length===1?"":"s"}`;
  document.getElementById("playLog").innerHTML=arr.length?`<table><thead><tr><th>Q</th><th>Side</th><th>Type</th><th>Player / Defense</th><th>Yards / Result</th><th></th></tr></thead><tbody>${arr.map(p=>{
- let player=p.side==="opponent" ? "Opponent" : p.type==="run"?p.runner:p.type==="pass"?`${p.passer} → ${p.receiver}`:p.type==="penalty"?p.player:p.player;
- let defense=p.tacklers?.length?`Tackles: ${p.tacklers.map(x=>x.split("|")[0]).join(", ")}`:"";
- if(p.defense?.length) defense += `${defense?" · ":""}${p.defense.map(x=>({sack:"Sack",int:"INT",pbu:"PBU",ff:"FF",fr:"FR"}[x]||x)).join(", ")}`;
- let result=p.type==="penalty"?`${p.penalty} (${p.penYards} yds)`:p.type==="special"?`${p.special} · ${p.yards} yds`:p.side==="opponent"?`${p.yards>=0?"+":""}${p.yards} yds`:p.type==="pass"?`${p.result} · ${p.yards} yds`:`${p.yards>=0?"+":""}${p.yards} yds`;
- return `<tr><td>${p.q}</td><td><span class="badge">${p.side==="opponent"?"Opponent":"Cass"}</span></td><td><span class="badge">${p.type}</span></td><td>${player||"—"}${defense?`<div class="muted" style="font-size:11px;margin-top:4px">${defense}</div>`:""}</td><td>${result}</td><td><button class="btn ghost" onclick="editPlay('${p.id}')">Edit</button> <button class="btn danger" onclick="deletePlay('${p.id}')">Delete</button></td></tr>`}).join("")}</tbody></table>`:'<div class="empty">No plays logged for this game.</div>';
+  let player=p.side==="opponent" ? "Opponent" : p.type==="run"?p.runner:p.type==="pass"?`${p.passer} → ${p.receiver}`:p.type==="penalty"?p.player:p.player;
+  let defense=p.tacklers?.length?`Tackles: ${p.tacklers.map(x=>x.split("|")[0]).join(", ")}`:"";
+  if(p.defense?.length) defense += `${defense?" · ":""}${p.defense.map(x=>({sack:"Sack",int:"INT",pbu:"PBU",ff:"FF",fr:"FR"}[x]||x)).join(", ")}`;
+  let result=p.touchdown?"TOUCHDOWN":p.type==="penalty"?`${p.penalty} (${p.penYards} yds)`:p.type==="special"?`${p.special} · ${p.yards} yds`:p.side==="opponent"?`${p.yards>=0?"+":""}${p.yards} yds`:p.type==="pass"?`${p.result} · ${p.yards} yds`:`${p.yards>=0?"+":""}${p.yards} yds`;
+  return `<tr><td>${p.q}</td><td><span class="badge">${p.side==="opponent"?"Opponent":"Cass"}</span></td><td><span class="badge">${p.type}</span></td><td>${player||"—"}${defense?`<div class="muted" style="font-size:11px;margin-top:4px">${defense}</div>`:""}</td><td>${result}</td><td class="td-actions"><button class="btn ghost" onclick="editPlay('${p.id}')">Edit</button> <button class="btn danger" onclick="deletePlay('${p.id}')">Delete</button></td></tr>`}).join("")}</tbody></table>`:'<div class="empty">No plays logged for this game.</div>';
 }
-
+function editPlayerOptions(selectedValue, role){
+ const roster=eligiblePlayers(role); return `<option value="">Select player</option>`+roster.map(x=>{const v=`${x.n}|${x.name}`;return `<option value="${v}" ${v===selectedValue?'selected':''}>${x.n} ${x.name}</option>`}).join('');
+}
+function allPlayerOptions(selectedValue){return `<option value="TEAM|Team" ${selectedValue==="TEAM|Team"?'selected':''}>Team</option>`+players.map(x=>{const v=`${x.n}|${x.name}`;return `<option value="${v}" ${v===selectedValue?'selected':''}>${x.n} ${x.name}</option>`}).join('');}
 function editPlay(id){
  const p=plays.find(x=>x.id===id); if(!p)return;
- const runner=p.runner?.split("|")[0]||"";
- const passer=p.passer?.split("|")[0]||"";
- const receiver=p.receiver?.split("|")[0]||"";
- const side=p.side||"cass";
- const newQ=prompt("Quarter (1, 2, 3, 4, OT)",p.q); if(newQ===null)return;
- p.q=newQ;
- if(p.type==="run" && side==="cass"){
-   const choices=players.filter(x=>["QB","RB","WR","TE"].includes(x.pos)).map(x=>`${x.n} ${x.name}`).join("\\n");
-   const val=prompt("Runner jersey number:\\n\\n"+choices,runner.replace("#","")); if(val===null)return;
-   const found=players.find(x=>x.n===("#"+val.trim())||x.n===val.trim());
-   if(!found)return alert("Player not found.");
-   p.runner=`${found.n}|${found.name}`;
+ const runner=p.runner||"", passer=p.passer||"", receiver=p.receiver||"";
+ document.getElementById('editForm').innerHTML=`<div class="edit-grid">
+  <div><label>Quarter</label><select id="editQ"><option ${p.q==='1'?'selected':''}>1</option><option ${p.q==='2'?'selected':''}>2</option><option ${p.q==='3'?'selected':''}>3</option><option ${p.q==='4'?'selected':''}>4</option><option ${p.q==='OT'?'selected':''}>OT</option></select></div>
+  <div><label>Possession</label><select id="editSide"><option value="cass" ${p.side==='cass'?'selected':''}>Cass Tech</option><option value="opponent" ${p.side==='opponent'?'selected':''}>Opponent</option></select></div>
+  <div><label>Play Type</label><select id="editType"><option value="run" ${p.type==='run'?'selected':''}>Run</option><option value="pass" ${p.type==='pass'?'selected':''}>Pass</option><option value="special" ${p.type==='special'?'selected':''}>Special Teams</option><option value="penalty" ${p.type==='penalty'?'selected':''}>Penalty</option></select></div>
+  <div><label>Start Yard Line</label><input id="editStart" type="number" min="0" max="100" step="1" value="${p.start??0}"></div>
+  <div><label>End Yard Line</label><input id="editEnd" type="number" min="0" max="100" step="1" value="${p.end??0}"></div>
+  <div><label>Yards</label><input id="editYards" type="number" step="1" value="${p.yards??0}"></div>
+  <div id="editPlayerFields" class="full"></div>
+  <div id="editPenaltyFields" class="full"></div>
+  <div id="editDefenseFields" class="full"></div>
+ </div>`;
+ function refresh(){
+  const side=document.getElementById('editSide').value, typ=document.getElementById('editType').value;
+  let html='';
+  if(side==='cass'&&typ==='run') html=`<label>Runner</label><select id="editRunner">${editPlayerOptions(runner,'runner')}</select>`;
+  if(side==='cass'&&typ==='pass') html=`<div class="edit-grid"><div><label>Passer</label><select id="editPasser">${editPlayerOptions(passer,'passer')}</select></div><div><label>Receiver</label><select id="editReceiver">${editPlayerOptions(receiver,'receiver')}</select></div><div><label>Pass Result</label><select id="editResult"><option ${p.result==='Complete'?'selected':''}>Complete</option><option ${p.result==='Incomplete'?'selected':''}>Incomplete</option><option ${p.result==='Interception'?'selected':''}>Interception</option></select></div></div>`;
+  if(typ==='special') html=`<div class="edit-grid"><div><label>Player</label><select id="editSpecialPlayer">${allPlayerOptions(p.player||'')}</select></div><div><label>Special Teams Play</label><select id="editSpecialType"><option>Punt</option><option>Kickoff</option><option>Field Goal</option><option>Extra Point</option><option>Punt Return</option><option>Kick Return</option><option>Blocked Kick</option></select></div></div>`;
+  if(typ==='penalty') html=`<div class="edit-grid"><div><label>Player / Team</label><select id="editPenPlayer">${allPlayerOptions(p.player||p.penPlayer||'TEAM|Team')}</select></div><div><label>Penalty</label><select id="editPenType"><option>Holding</option><option>False Start</option><option>Offside</option><option>Pass Interference</option><option>Personal Foul</option><option>Unsportsmanlike Conduct</option><option>Delay of Game</option><option>Other</option></select></div><div><label>Penalty Yards</label><input id="editPenYards" type="number" min="0" max="100" step="1" value="${p.penYards??10}"></div></div>`;
+  if(side==='opponent'&&(typ==='run'||typ==='pass'||typ==='special')) html+=`<div class="edit-grid" style="margin-top:12px"><div><label>Opponent Yards</label><input id="editOppYards" type="number" step="1" value="${p.yards??0}"></div><div><label>Tacklers (select all)</label><div class="player-chips">${players.map((x,i)=>{const v=`${x.n}|${x.name}`,sel=(p.tacklers||[]).includes(v);return `<button type="button" class="player-chip edit-tack ${sel?'selected':''}" data-value="${v}"><strong>${x.n}</strong><span>${x.name}</span></button>`}).join('')}</div></div><div class="full"><label>Defensive Results</label><div class="edit-checks">${[['sack','Sack'],['int','Interception'],['pbu','Pass Breakup'],['ff','Fumble Caused'],['fr','Fumble Recovered']].map(([v,l])=>`<label><input type="checkbox" class="edit-def" value="${v}" ${(p.defense||[]).includes(v)?'checked':''}>${l}</label>`).join('')}</div></div></div>`;
+  document.getElementById('editPlayerFields').innerHTML=html;
+  if(typ==='penalty'){
+   document.getElementById('editPenType').value=p.penalty||'Holding';
+  }
+  if(typ==='special'&&document.getElementById('editSpecialType')) document.getElementById('editSpecialType').value=p.special||'Punt';
+  document.querySelectorAll('.edit-tack').forEach(b=>b.onclick=()=>b.classList.toggle('selected'));
  }
- if(p.type==="pass" && side==="cass"){
-   let val=prompt("Passer jersey number (QB only)",passer.replace("#","")); if(val===null)return;
-   let found=players.find(x=>x.n===("#"+val.trim())&&x.pos==="QB"); if(!found)return alert("QB not found.");
-   p.passer=`${found.n}|${found.name}`;
-   val=prompt("Receiver jersey number (WR/RB/TE)",receiver.replace("#","")); if(val===null)return;
-   found=players.find(x=>x.n===("#"+val.trim())&&["WR","RB","TE"].includes(x.pos)); if(!found)return alert("Receiver not found.");
-   p.receiver=`${found.n}|${found.name}`;
- }
- if(side==="opponent" && (p.type==="run"||p.type==="pass"||p.type==="special")){
-   const val=prompt("Yards gained/lost by opponent",p.yards); if(val===null)return;
-   p.yards=Number(val)||0;
-   const t=prompt("Tackler jersey numbers, comma-separated",p.tacklers?.map(x=>x.split("|")[0].replace("#","")).join(", ")||"");
-   if(t!==null){
-     p.tacklers=t.split(",").map(s=>s.trim()).filter(Boolean).map(n=>players.find(x=>x.n===("#"+n)||x.n===n)).filter(Boolean).map(x=>`${x.n}|${x.name}`);
-   }
- }
- if(p.type!=="penalty" && p.type!=="special"){
-   const st=prompt("Starting yard line",p.start); if(st!==null)p.start=Number(st)||0;
-   const en=prompt("Ending yard line",p.end); if(en!==null){p.end=Number(en)||0;p.yards=p.end-p.start;}
- }
- save();renderPlayLog();renderStats();
+ document.getElementById('editSide').onchange=refresh;document.getElementById('editType').onchange=refresh;refresh();
+ document.getElementById('editModal').classList.add('open');document.getElementById('editModal').setAttribute('aria-hidden','false');window.editingPlayId=id;
 }
-
+function closeEdit(){document.getElementById('editModal').classList.remove('open');document.getElementById('editModal').setAttribute('aria-hidden','true');window.editingPlayId=null;}
+function saveEdit(){
+ const p=plays.find(x=>x.id===window.editingPlayId);if(!p)return;
+ p.q=document.getElementById('editQ').value;p.side=document.getElementById('editSide').value;p.type=document.getElementById('editType').value;p.start=Math.max(0,Math.min(100,Number(document.getElementById('editStart').value)||0));p.end=Math.max(0,Math.min(100,Number(document.getElementById('editEnd').value)||0));p.yards=Number(document.getElementById('editYards').value)||0;p.touchdown=false;p.defense=[];p.tacklers=[];
+ if(p.side==='cass'&&p.type==='run'){p.runner=document.getElementById('editRunner')?.value||'';p.yards=p.end-p.start;p.touchdown=fieldFlipped?p.end===0:p.end===100;}
+ if(p.side==='cass'&&p.type==='pass'){p.passer=document.getElementById('editPasser')?.value||'';p.receiver=document.getElementById('editReceiver')?.value||'';p.result=document.getElementById('editResult')?.value||'Complete';if(p.result==='Complete'){p.yards=p.end-p.start;p.touchdown=fieldFlipped?p.end===0:p.end===100;}else p.yards=0;}
+ if(p.type==='special'){p.player=document.getElementById('editSpecialPlayer')?.value||'';p.special=document.getElementById('editSpecialType')?.value||'Punt';if(p.side==='opponent')p.yards=Number(document.getElementById('editOppYards')?.value)||0;}
+ if(p.type==='penalty'){p.player=document.getElementById('editPenPlayer')?.value||'TEAM|Team';p.penalty=document.getElementById('editPenType')?.value||'Holding';p.penYards=Number(document.getElementById('editPenYards')?.value)||0;p.yards=0;}
+ if(p.side==='opponent'&&(p.type==='run'||p.type==='pass'||p.type==='special')){p.yards=Number(document.getElementById('editOppYards')?.value)||0;p.tacklers=[...document.querySelectorAll('.edit-tack.selected')].map(b=>b.dataset.value);p.defense=[...document.querySelectorAll('.edit-def:checked')].map(x=>x.value);}
+ save();closeEdit();renderPlayLog();renderStats();
+}
 function deletePlay(id){if(confirm("Delete this play?")){plays=plays.filter(p=>p.id!==id);save();renderAll()}}
 function stats(){
  let out={}; players.forEach((x,i)=>out[i]={num:x.n,name:x.name,cmp:0,att:0,passY:0,car:0,rushY:0,rec:0,recY:0,tack:0,sack:0,int:0,pbu:0,ff:0,fr:0});
@@ -518,14 +560,19 @@ function renderStats(){
  const pens=plays.filter(p=>p.type==="penalty").reduce((a,p)=>a+(p.penYards||0),0);
  document.getElementById("teamStats").innerHTML=`<div class="statgrid"><div class="stat"><b>${plays.length}</b><span>Total Plays Logged</span></div><div class="stat"><b>${att}</b><span>Pass Attempts</span></div><div class="stat"><b>${passY}</b><span>Passing Yards</span></div><div class="stat"><b>${car}</b><span>Rush Attempts</span></div><div class="stat"><b>${rush}</b><span>Rushing Yards</span></div><div class="stat"><b>${cmp}</b><span>Completions</span></div><div class="stat"><b>${rec}</b><span>Receptions</span></div><div class="stat"><b>${recY}</b><span>Receiving Yards</span></div><div class="stat"><b>${oppY}</b><span>Opponent Yards Logged</span></div><div class="stat"><b>${pens}</b><span>Penalty Yards Logged</span></div></div>`;
 }
-function renderAll(){renderSchedule();renderGameSelect();controls();renderField();renderPlayLog();renderStats();}
+function renderAll(){renderSchedule();renderGameSelect();controls();renderField();renderPlayLog();renderStats();renderRoster();}
 
+function renderRoster(){
+ const box=document.getElementById('rosterGrid');if(!box)return;
+ box.innerHTML=players.map(p=>`<div class="card pad" style="box-shadow:none"><strong>${p.n} ${p.name}</strong><div class="muted" style="margin-top:4px">${p.pos||'Position not listed'}</div></div>`).join('');
+}
 function showPage(id){
-  if(!["schedule","season","log"].includes(id)) return;
+  if(!["schedule","season","log","roster","more"].includes(id)) return;
   document.querySelectorAll(".navbtn").forEach(x=>x.classList.toggle("active",x.dataset.page===id));
   document.querySelectorAll(".bottom-nav button").forEach(x=>x.classList.toggle("active",x.dataset.page===id));
   document.querySelectorAll(".page").forEach(x=>x.classList.remove("active"));
   document.getElementById(id).classList.add("active");
+  if(id==='roster')renderRoster();
 }
 document.querySelectorAll(".navbtn,.bottom-nav button").forEach(b=>b.onclick=()=>showPage(b.dataset.page));
 document.querySelectorAll(".type-btn").forEach(b=>b.onclick=()=>{document.querySelectorAll(".type-btn").forEach(x=>x.classList.remove("active"));b.classList.add("active");type=b.dataset.type;controls();renderField();});
