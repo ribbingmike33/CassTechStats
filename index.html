@@ -429,13 +429,14 @@ function saveLiveState(){
  if(gid) localStorage.setItem("ct_current_game",gid);
 }
 const save=()=>{localStorage.setItem("ct_games",JSON.stringify(games));localStorage.setItem("ct_plays",JSON.stringify(plays));if(pendingConversion)localStorage.setItem("ct_pending_conversion",JSON.stringify(pendingConversion));else localStorage.removeItem("ct_pending_conversion");saveLiveState();};
-// Yardage is always measured from the offense's perspective.
-// When the field is flipped, the offense is moving toward visual left;
-// otherwise it is moving toward visual right. The same formula applies to
-// Cass Tech and the opponent.
-function playGain(side,start,end,flipped){
+// Yardage is measured in the scoring direction of the team with possession,
+// NOT from the screen direction. The internal field coordinate always runs
+// 0 = Cass Tech goal line to 100 = opponent goal line. Therefore Cass Tech
+// gains when the coordinate increases, while the opponent gains when it
+// decreases. fieldFlipped is purely visual and must never change the stat math.
+function playGain(side,start,end){
  const a=Number(start)||0,b=Number(end)||0;
- return flipped ? a-b : b-a;
+ return side==='opponent' ? a-b : b-a;
 }
 // v2 accidentally inverted every saved opponent play. Reverse that exact
 // one-time migration so existing logs return to their original field-based
@@ -521,7 +522,9 @@ function renderField(){
      <div class="yard-control-head"><strong>End Yard Line</strong><span class="yard-value" id="endYardValue">${yardLineLabel(endY)}</span></div>
      <input class="yard-range" id="endYardRange" type="range" min="0" max="100" step="1" value="${endY}" ${fieldFlipped?'dir="rtl"':''} oninput="setYard('end',this.value)">
      <div class="yard-ticks"><span>0</span><span>10</span><span>20</span><span>30</span><span>40</span><span>50</span><span>40</span><span>30</span><span>20</span><span>10</span><span>0</span></div>
-     <div class="yard-buttons"><button type="button" onclick="adjustYard('end',-5)">−5</button><button type="button" onclick="adjustYard('end',-1)">−1</button><button type="button" onclick="adjustYard('end',1)">+1</button><button type="button" onclick="adjustYard('end',5)">+5</button></div>
+     <div class="yard-buttons">${fieldFlipped
+ ? `<button type="button" onclick="adjustYard('end',5)">+5</button><button type="button" onclick="adjustYard('end',1)">+1</button><button type="button" onclick="adjustYard('end',-1)">−1</button><button type="button" onclick="adjustYard('end',-5)">−5</button>`
+ : `<button type="button" onclick="adjustYard('end',-5)">−5</button><button type="button" onclick="adjustYard('end',-1)">−1</button><button type="button" onclick="adjustYard('end',1)">+1</button><button type="button" onclick="adjustYard('end',5)">+5</button>`}</div>
    </div>
  </div>
  </div>`;
@@ -812,7 +815,7 @@ function updatePreview(){
  }
  if(type==="special"){
    let spType=selected("specialType")||"Select play";
-   const y=playGain(opp?"opponent":"cass",startY,endY,fieldFlipped);
+   const y=playGain(opp?"opponent":"cass",startY,endY);
    const result=spType==="Field Goal" ? ` · ${selected("specialResult")||"Good"}` : "";
    p.innerHTML=`<strong>${opp?currentOpponentName():"Cass Tech"} Special Teams</strong><br>${spType}${result}${opp?` · ${y>=0?"+":""}${y} yards`:""}`;
  }
@@ -833,13 +836,13 @@ function logPlay(){
  const dd=currentDownDistance(game), down=dd.down, distance=dd.distance;
  const p={id:"p"+Date.now()+Math.random().toString(36).slice(2,6),game,q:quarter,type,side,start:Number(startY),end:Number(endY),yards:0,defense:[],tacklers:[],touchdown:false,nextStart:Number(startY),nextDown:down,nextDistance:distance,nextFieldFlipped:fieldFlipped,nextPossession:side};
  let gain=0, turnover=false, scoring=false;
- const goal=fieldFlipped?0:100;
+ const goal=side==='opponent'?0:100;
  const setNext=(ns,nd=1,nx=10,np=side,nf=fieldFlipped)=>{p.nextStart=ns;p.nextDown=nd;p.nextDistance=nx;p.nextPossession=np;p.nextFieldFlipped=nf;p.nextQuarter=quarter;};
  const switchToOther=(spot)=>{const np=side==="cass"?"opponent":"cass";fieldFlipped=!fieldFlipped;setNext(100-spot,1,10,np,fieldFlipped);return np;};
 
  if(side==="cass" && type==="run"){
    const x=chosenPlayer("runner"); if(!x){alert("Select a runner.");return;}
-   p.runner=`${x.n}|${x.name}`; const rr=selected("runResult")||"Normal"; p.result=rr; p.yards=playGain(side,startY,endY,fieldFlipped); gain=p.yards;
+   p.runner=`${x.n}|${x.name}`; const rr=selected("runResult")||"Normal"; p.result=rr; p.yards=playGain(side,startY,endY); gain=p.yards;
    if(rr==="Fumble"){p.fumble=true;p.fumbleSpot=endY;}
    if(rr==="Safety"){p.safety=true;}
    p.touchdown=rr==="Normal" && endY===goal;
@@ -847,14 +850,14 @@ function logPlay(){
    const qb=chosenPlayer("passer"), rec=chosenPlayer("receiver"), res=selected("passResult")||"Complete";
    if(!qb||!rec){alert("Select passer and receiver.");return;}
    p.passer=`${qb.n}|${qb.name}`;p.receiver=`${rec.n}|${rec.name}`;p.result=res;
-   if(res==="Complete"){p.yards=playGain(side,startY,endY,fieldFlipped);gain=p.yards;p.touchdown=endY===goal;}
+   if(res==="Complete"){p.yards=playGain(side,startY,endY);gain=p.yards;p.touchdown=endY===goal;}
    else if(res==="Interception"){p.yards=0;p.interceptionSpot=endY;turnover=true;}
    else if(res==="Fumble"){p.yards=0;p.fumble=true;p.fumbleSpot=endY;}
    else if(res==="Safety"){p.yards=0;p.safety=true;}
    else {p.yards=0;}
  } else if(side==="opponent" && (type==="run"||type==="pass")){
    const res=selected("oppPlayResult")||"Normal";
-   p.result=res;p.yards=playGain(side,startY,endY,fieldFlipped);gain=p.yards;
+   p.result=res;p.yards=playGain(side,startY,endY);gain=p.yards;
    p.tacklers=getSelectedPlayers().map(x=>`${x.n}|${x.name}`);p.defense=getDefStats();
    if(type==="pass"&&res==="Incomplete")p.yards=0;
    if(type==="pass"&&res==="Interception"){p.yards=0;p.interceptionSpot=endY;turnover=true;}
@@ -865,7 +868,7 @@ function logPlay(){
  } else if(side==="cass" && type==="special"){
    p.special=selected("specialType");p.result=selected("specialResult")||"";p.player="";
    if(["Field Goal","Extra Point","Two Point Conversion"].includes(p.special)){p.yards=0;}
-   else p.yards=playGain(side,startY,endY,fieldFlipped);
+   else p.yards=playGain(side,startY,endY);
    gain=p.yards;
    if(["Punt Return","Kick Return"].includes(p.special))p.touchdown=endY===goal;
    if(p.special==="Field Goal"){
@@ -875,7 +878,7 @@ function logPlay(){
    if(p.special==="Blocked Kick"){p.blocked=true;p.blockedSpot=endY;}
    if(p.special==="Onside Kick"){p.onside=true;}
  } else if(side==="opponent" && type==="special"){
-   p.special=selected("specialType");p.result=selected("specialResult")||"";p.yards=playGain(side,startY,endY,fieldFlipped);gain=p.yards;
+   p.special=selected("specialType");p.result=selected("specialResult")||"";p.yards=playGain(side,startY,endY);gain=p.yards;
    if(["Punt Return","Kick Return"].includes(p.special))p.touchdown=endY===goal;
    if(p.special==="Field Goal"){
      if(p.result==="Good")scoring=true; else {turnover=true;p.missedKick=true;p.missedKickSpot=endY;}
@@ -977,11 +980,11 @@ function closeEdit(){document.getElementById('editModal').classList.remove('open
 function saveEdit(){
  const p=plays.find(x=>x.id===window.editingPlayId);if(!p)return;
  p.q=document.getElementById('editQ').value;p.side=document.getElementById('editSide').value;p.type=document.getElementById('editType').value;p.start=Math.max(0,Math.min(100,Number(p.start)||0));p.end=Math.max(0,Math.min(100,Number(document.getElementById('editEnd').value)||0));p.yards=0;p.touchdown=false;p.defense=[];p.tacklers=[];
- if(p.side==='cass'&&p.type==='run'){p.runner=document.getElementById('editRunner')?.value||'';p.yards=fieldFlipped?p.start-p.end:p.end-p.start;p.touchdown=fieldFlipped?p.end===0:p.end===100;}
- if(p.side==='cass'&&p.type==='pass'){p.passer=document.getElementById('editPasser')?.value||'';p.receiver=document.getElementById('editReceiver')?.value||'';p.result=document.getElementById('editResult')?.value||'Complete';if(p.result==='Complete'){p.yards=fieldFlipped?p.start-p.end:p.end-p.start;p.touchdown=fieldFlipped?p.end===0:p.end===100;}else p.yards=0;}
- if(p.type==='special'){p.player=document.getElementById('editSpecialPlayer')?.value||'';p.special=document.getElementById('editSpecialType')?.value||'Punt';p.result=(p.special==='Field Goal'||p.special==='Extra Point'||p.special==='Two Point Conversion')?(document.getElementById('editSpecialResult')?.value||'Good'):'';if(p.special==='Field Goal'||p.special==='Extra Point'||p.special==='Two Point Conversion')p.yards=0;else p.yards=playGain(p.side,p.start,p.end,fieldFlipped);}
+ if(p.side==='cass'&&p.type==='run'){p.runner=document.getElementById('editRunner')?.value||'';p.yards=playGain(p.side,p.start,p.end);p.touchdown=p.side==='opponent'?p.end===0:p.end===100;}
+ if(p.side==='cass'&&p.type==='pass'){p.passer=document.getElementById('editPasser')?.value||'';p.receiver=document.getElementById('editReceiver')?.value||'';p.result=document.getElementById('editResult')?.value||'Complete';if(p.result==='Complete'){p.yards=playGain(p.side,p.start,p.end);p.touchdown=p.side==='opponent'?p.end===0:p.end===100;}else p.yards=0;}
+ if(p.type==='special'){p.player=document.getElementById('editSpecialPlayer')?.value||'';p.special=document.getElementById('editSpecialType')?.value||'Punt';p.result=(p.special==='Field Goal'||p.special==='Extra Point'||p.special==='Two Point Conversion')?(document.getElementById('editSpecialResult')?.value||'Good'):'';if(p.special==='Field Goal'||p.special==='Extra Point'||p.special==='Two Point Conversion')p.yards=0;else p.yards=playGain(p.side,p.start,p.end);}
  if(p.type==='penalty'){p.player=document.getElementById('editPenPlayer')?.value||'TEAM|Team';p.penalty=document.getElementById('editPenType')?.value||'Holding';p.penYards=Number(document.getElementById('editPenYards')?.value)||0;p.yards=0;}
- if(p.side==='opponent'&&(p.type==='run'||p.type==='pass'||p.type==='special')){p.yards=playGain('opponent',p.start,p.end,fieldFlipped);p.tacklers=[...document.querySelectorAll('.edit-tack.selected')].map(b=>b.dataset.value);p.defense=[...document.querySelectorAll('.edit-def:checked')].map(x=>x.value);}
+ if(p.side==='opponent'&&(p.type==='run'||p.type==='pass'||p.type==='special')){p.yards=playGain('opponent',p.start,p.end);p.tacklers=[...document.querySelectorAll('.edit-tack.selected')].map(b=>b.dataset.value);p.defense=[...document.querySelectorAll('.edit-def:checked')].map(x=>x.value);}
  save();closeEdit();renderPlayLog();renderStats();renderCurrentGame();
 }
 function deletePlay(id){if(confirm("Delete this play?")){plays=plays.filter(p=>p.id!==id);save();renderAll()}}
