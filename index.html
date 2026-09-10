@@ -51,7 +51,7 @@ select:focus,input:focus{border-color:var(--navy)}
 .game-setup-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
 .game-setup-toggle{border:1px solid var(--line);background:#EAF4F0;color:var(--navy);border-radius:9px;padding:8px 12px;font-weight:850}
 .game-setup.collapsed .game-setup-body{display:none}
-.current-scoreboard{background:var(--navy);color:#fff;border-radius:14px;padding:14px 18px;margin-bottom:12px;overflow:hidden}.game-status-row{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:12px}.game-status{font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.7px;opacity:.85}.end-game-btn{background:#fff;color:#8A241A;border:0;border-radius:9px;padding:10px 14px;font-weight:900}.end-game-btn:disabled{opacity:.6;cursor:default}.game-ended-banner{margin:0 0 16px;padding:12px 14px;border:1px solid #BFD8CE;border-radius:10px;background:#EAF4F0;color:#17352A;font-weight:850}
+.current-scoreboard{background:var(--navy);color:#fff;border-radius:14px;padding:14px 18px;margin-bottom:12px;overflow:hidden}.game-status-row{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:12px}.game-status{font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.7px;opacity:.85}.end-game-btn{background:#fff;color:#8A241A;border:0;border-radius:9px;padding:10px 14px;font-weight:900}.end-game-btn:disabled{opacity:.6;cursor:default}.reset-game-btn{background:transparent;color:#fff;border:1px solid #ffffff80;border-radius:9px;padding:10px 14px;font-weight:900}.reset-game-btn:hover{background:#ffffff14}.game-ended-banner{margin:0 0 16px;padding:12px 14px;border:1px solid #BFD8CE;border-radius:10px;background:#EAF4F0;color:#17352A;font-weight:850}
 .scoreboard-top{display:flex;justify-content:space-between;gap:20px;align-items:center}
 .score-team{font-size:12px;font-weight:850;text-transform:uppercase;letter-spacing:.6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:45vw}
 .score-num{font-size:38px;font-weight:950;line-height:1.05}
@@ -378,18 +378,27 @@ else {
 let plays=JSON.parse(localStorage.getItem("ct_plays")||"[]");
 let type="run", startY=15, endY=15, fieldFlipped=false, quarter="1";
 const save=()=>{localStorage.setItem("ct_games",JSON.stringify(games));localStorage.setItem("ct_plays",JSON.stringify(plays));};
+// Yardage is always measured from the offense's perspective.
+// When the field is flipped, the offense is moving toward visual left;
+// otherwise it is moving toward visual right. The same formula applies to
+// Cass Tech and the opponent.
 function playGain(side,start,end,flipped){
  const a=Number(start)||0,b=Number(end)||0;
- return side==="cass" ? (flipped ? a-b : b-a) : (flipped ? b-a : a-b);
+ return flipped ? a-b : b-a;
 }
-// Older versions calculated opponent yardage in the wrong direction. Repair those
-// saved values once so existing stats match the field direction.
-if(localStorage.getItem("ct_opponent_yards_v2")!=="1"){
- plays=plays.map(p=>{
-   if(p.side==="opponent" && ["run","pass","special"].includes(p.type) && Number(p.yards)!==0){ return {...p,yards:-Number(p.yards)}; }
-   return p;
- });
- localStorage.setItem("ct_opponent_yards_v2","1");
+// v2 accidentally inverted every saved opponent play. Reverse that exact
+// one-time migration so existing logs return to their original field-based
+// values. Future plays use playGain() above and are calculated correctly.
+if(localStorage.getItem("ct_opponent_yards_v3")!=="1"){
+ if(localStorage.getItem("ct_opponent_yards_v2")==="1"){
+   plays=plays.map(p=>{
+     if(p.side==="opponent" && ["run","pass","special"].includes(p.type) && Number(p.yards)!==0){
+       return {...p,yards:-Number(p.yards)};
+     }
+     return p;
+   });
+ }
+ localStorage.setItem("ct_opponent_yards_v3","1");
  localStorage.setItem("ct_plays",JSON.stringify(plays));
 }
 
@@ -754,10 +763,35 @@ function logPlay(){
    p.nextDown=1;p.nextDistance=10;p.nextStart=startY;p.nextPossession=possession;
    if(p.special==="Field Goal" && p.result==="No Good") switchPossession=true;
  } else if(type==="special" && (p.special==="Kickoff" || p.special==="Punt")){
-   const py=Number(p.penYards)||0;
-   // Accepted penalty changes field position without consuming another play for this tracker.
-   startY=Math.max(0,Math.min(100,startY + (possession==="cass"?(fieldFlipped?-py:py):(fieldFlipped?py:-py))));
-   endY=startY;p.nextStart=startY;p.nextDown=down;p.nextDistance=distance;
+   // Kicks change possession. The end marker represents the receiving team's
+   // final spot (return/dead-ball spot). Flip the field so the new offense
+   // sees that same physical spot from its own perspective.
+   const oldEnd=endY;
+   const opponentGoal=fieldFlipped ? 0 : 100;
+   const isTouchback=oldEnd===opponentGoal;
+
+   plays.unshift(p);save();
+
+   fieldFlipped=!fieldFlipped;
+   const receivingPossession=possession==="cass" ? "opponent" : "cass";
+   const possessionEl=document.getElementById("possession");
+   if(possessionEl) possessionEl.value=receivingPossession;
+
+   // NFHS-style touchback spot: receiving team gets the ball at its 20.
+   // Otherwise, convert the physical end spot into the new offense's
+   // perspective.
+   startY=isTouchback ? 20 : 100-oldEnd;
+   endY=startY;
+   p.nextStart=startY;
+   p.nextDown=1;
+   p.nextDistance=10;
+   p.nextPossession=receivingPossession;
+   p.touchback=isTouchback;
+
+   save();
+   renderPlayLog();renderStats();renderCurrentGame();controls();renderField();
+   setTimeout(()=>document.querySelector("#cg-logstats .controls .type-grid")?.scrollIntoView({behavior:"smooth",block:"start"}),80);
+   return;
  } else {
    const ddNext=advanceDownDistance(down,distance,gain);
    p.nextDown=ddNext.down;p.nextDistance=ddNext.distance;
@@ -919,6 +953,34 @@ function currentGameIsEnded(){
  const gid=document.getElementById('gameSelect')?.value;
  return !!games.find(g=>g.id===gid)?.final;
 }
+function resetGame(){
+ const gid=document.getElementById('gameSelect')?.value;
+ const game=games.find(g=>g.id===gid);
+ if(!game)return;
+ const gamePlays=plays.filter(p=>p.game===gid).length;
+ const msg=gamePlays
+   ? `Reset ${game.opp||'this game'}? This will permanently delete all ${gamePlays} logged plays, statistics, and the game score.`
+   : `Reset ${game.opp||'this game'}? This will clear its score and final status.`;
+ if(!window.confirm(msg))return;
+ plays=plays.filter(p=>p.game!==gid);
+ game.cass=null;
+ game.oppScore=null;
+ game.final=false;
+ delete game.finalAt;
+ delete game.finalScore;
+ type="run";
+ quarter="1";
+ fieldFlipped=false;
+ startY=15;
+ endY=15;
+ const possessionEl=document.getElementById("possession");
+ if(possessionEl) possessionEl.value="cass";
+ document.querySelectorAll(".type-btn").forEach(b=>b.classList.toggle("active",b.dataset.type==="run"));
+ save();
+ renderAll();
+ const logPage=document.getElementById("log");
+ if(logPage?.classList.contains("active")) setTimeout(()=>document.querySelector("#cg-logstats .controls .type-grid")?.scrollIntoView({behavior:"smooth",block:"start"}),80);
+}
 function endGame(){
  const gid=document.getElementById('gameSelect')?.value;
  const game=games.find(g=>g.id===gid);
@@ -943,7 +1005,7 @@ function renderCurrentScoreboard(){
  const gid=document.getElementById('gameSelect')?.value; const game=games.find(g=>g.id===gid); if(!game){el.innerHTML='';return;}
  const sc=scoreForGame(gid); const o=game.opp||'Opponent';
  const ended=!!game.final;
- el.innerHTML=`<div class="scoreboard-top"><div><div class="score-team">CASS TECH</div><div class="score-num">${ended?Number(game.cass)||0:sc.cass}</div></div><div style="text-align:right"><div class="score-team">${o}</div><div class="score-num">${ended?Number(game.oppScore)||0:sc.opp}</div></div></div><div class="game-status-row"><span class="game-status">${ended?'Final':'Live Game'}</span><button type="button" class="end-game-btn" onclick="endGame()" ${ended?'disabled':''}>${ended?'Game Ended':'End Game'}</button></div>`;
+ el.innerHTML=`<div class="scoreboard-top"><div><div class="score-team">CASS TECH</div><div class="score-num">${ended?Number(game.cass)||0:sc.cass}</div></div><div style="text-align:right"><div class="score-team">${o}</div><div class="score-num">${ended?Number(game.oppScore)||0:sc.opp}</div></div></div><div class="game-status-row"><span class="game-status">${ended?'Final':'Live Game'}</span><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end"><button type="button" class="reset-game-btn" onclick="resetGame()">Reset Game</button><button type="button" class="end-game-btn" onclick="endGame()" ${ended?'disabled':''}>${ended?'Game Ended':'End Game'}</button></div></div>`;
 }
 function renderCurrentBoxScore(){
  const el=document.getElementById('currentBoxScore'); if(!el)return;
