@@ -51,6 +51,7 @@ select:focus,input:focus{border-color:var(--navy)}
 .game-setup-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
 .game-setup-toggle{border:1px solid var(--line);background:#EAF4F0;color:var(--navy);border-radius:9px;padding:8px 12px;font-weight:850}
 .game-setup.collapsed .game-setup-body{display:none}
+.individual-statbook{display:flex;flex-direction:column;gap:14px}.individual-stat-section{border:1px solid var(--line);border-radius:10px;overflow:hidden;background:#fff}.individual-stat-title{display:flex;align-items:center;gap:9px;padding:12px 14px;background:#006B4F;color:#fff;font-size:16px;line-height:1.1}.stat-section-logo{width:26px;height:26px;border-radius:5px;background:#fff;color:#006B4F;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:950;flex:0 0 26px}.individual-stat-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}.individual-stat-scroll::-webkit-scrollbar{display:none}.individual-stat-table{min-width:max-content;width:100%;border-collapse:collapse}.individual-stat-table th,.individual-stat-table td{white-space:nowrap;text-align:center;padding:9px 12px;border-bottom:1px solid var(--line);font-size:13px;height:42px}.individual-stat-table th{background:#F1F5F3;color:#17352A;font-size:12px;letter-spacing:.15px;font-weight:900;border-bottom:2px solid var(--line)}.individual-stat-table th:first-child,.individual-stat-table td:first-child{text-align:left;min-width:205px;position:sticky;left:0;z-index:2;border-right:1px solid var(--line)}.individual-stat-table th:first-child{background:#F1F5F3}.individual-stat-table td:first-child{background:#fff}.individual-stat-table tbody tr:nth-child(even) td{background:#F8FAF9}.individual-stat-table tbody tr:nth-child(even) td:first-child{background:#F8FAF9}.individual-stat-table tr:last-child td{border-bottom:0}.individual-stat-table .stat-team-total td{background:#EEF5F1!important;font-weight:950;border-top:2px solid var(--line)}.individual-stat-table .stat-team-total td:first-child{background:#EEF5F1!important}.player-num{color:var(--muted);font-weight:650;margin-left:5px}.individual-stat-section + .individual-stat-section{margin-top:0}
 .current-scoreboard{background:var(--navy);color:#fff;border-radius:14px;padding:14px 18px;margin-bottom:12px;overflow:hidden}.game-status-row{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:12px}.game-status{font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.7px;opacity:.85}.end-game-btn{background:#fff;color:#8A241A;border:0;border-radius:9px;padding:10px 14px;font-weight:900}.end-game-btn:disabled{opacity:.6;cursor:default}.reset-game-btn{background:transparent;color:#fff;border:1px solid #ffffff80;border-radius:9px;padding:10px 14px;font-weight:900}.reset-game-btn:hover{background:#ffffff14}.game-ended-banner{margin:0 0 16px;padding:12px 14px;border:1px solid #BFD8CE;border-radius:10px;background:#EAF4F0;color:#17352A;font-weight:850}
 .scoreboard-top{display:flex;justify-content:space-between;gap:20px;align-items:center}
 .score-team{font-size:12px;font-weight:850;text-transform:uppercase;letter-spacing:.6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:45vw}
@@ -508,6 +509,10 @@ function playGain(side,start,end){
  const a=Number(start)||0,b=Number(end)||0;
  return side==='cass' ? b-a : a-b;
 }
+function isTouchdownSpot(side,end){
+ const y=Number(end);
+ return side==='cass' ? y>=100 : y<=0;
+}
 // One-time repair for saved opponent run/pass/special yardage: derive it from absolute field coordinates.
 if(localStorage.getItem("ct_opponent_yards_v4")!=="1"){
  plays=plays.map(p=>{
@@ -937,7 +942,7 @@ function logPlay(){
      p.tacklers=getSelectedPlayers().map(x=>`${x.n}|${x.name}`); p.defense=getDefStats(); p.defenseCredits={}; if(p.tacklers[0])p.defense.forEach(d=>p.defenseCredits[d]=[p.tacklers[0]]);
    }
    gain=playGain(possession,startY,endY); p.yards=gain;
-   p.touchdown=endY===(possession==="cass"?100:0);
+   p.touchdown=isTouchdownSpot(possession,endY);
    if(possession==="opponent" && p.defense.includes("fr")) switchPossession=true;
  }
  if(type==="pass"){
@@ -945,13 +950,13 @@ function logPlay(){
      const qv=chosenPlayer("passer"),r=chosenPlayer("receiver"); if(!qv||!r){alert("Select passer and receiver.");return;}
      p.passer=`${qv.n}|${qv.name}`;p.receiver=`${r.n}|${r.name}`;p.result=selected("passResult")||"Complete";
      if(p.result==="Complete")p.yards=playGain("cass",startY,endY); else p.yards=0;
-     gain=p.yards;p.touchdown=p.result==="Complete" && endY===100;
+     gain=p.yards;p.touchdown=p.result==="Complete" && isTouchdownSpot("cass",endY);
      if(p.result==="Interception"){p.interception=true;p.yards=0;switchPossession=true;}
    }else{
      p.tacklers=getSelectedPlayers().map(x=>`${x.n}|${x.name}`);p.defense=getDefStats();p.defenseCredits={};if(p.tacklers[0])p.defense.forEach(d=>p.defenseCredits[d]=[p.tacklers[0]]);
      p.result=getDefStats().includes("int")?"Interception":"Complete";
      gain=playGain("opponent",startY,endY);p.yards=p.defense.includes("int")?0:gain;
-     p.touchdown=p.defense.includes("int") && endY===0;
+     p.touchdown=p.defense.includes("int") && isTouchdownSpot("cass",endY);
      if(p.touchdown)p.scoringSide="cass";
      if(p.defense.includes("int"))switchPossession=true;
    }
@@ -960,7 +965,7 @@ function logPlay(){
    p.special=selected("specialType")||"Punt";
    if(p.special==="Kickoff") kickoffRequired=false;
    p.result=(p.special==="Field Goal"||p.special==="Onside Kick")?(selected("specialResult")||"Good"):"";
-   if(["Punt Return","Kick Return"].includes(p.special)){gain=playGain(possession,startY,endY);p.yards=gain;p.touchdown=endY===(possession==="cass"?100:0);}
+   if(["Punt Return","Kick Return"].includes(p.special)){gain=playGain(possession,startY,endY);p.yards=gain;p.touchdown=isTouchdownSpot(possession,endY);}
    else if(["Punt","Kickoff","Blocked Kick","Onside Kick"].includes(p.special)){gain=playGain(possession,startY,endY);p.yards=gain;}
    else p.yards=0;
    if(p.special==="Field Goal" && p.result==="No Good")switchPossession=true;
@@ -996,7 +1001,7 @@ function logPlay(){
  }
  const fieldGoalGood=type==="special"&&p.special==="Field Goal"&&p.result==="Good";
  const touchdown=!!p.touchdown;
- if(touchdown && !p.scoringSide)p.scoringSide=possession;
+ if(touchdown) p.scoringSide=p.scoringSide||possession;
  if(touchdown){
    p.nextDown=1;p.nextDistance=10;p.nextStart=35;p.nextPossession=possession;
    plays.unshift(p);setPlayType("special");startY=35;endY=35;fieldFlipped=false;lastPossession=possession;save();
@@ -1105,8 +1110,8 @@ function closeEdit(){document.getElementById('editModal').classList.remove('open
 function saveEdit(){
  const p=plays.find(x=>x.id===window.editingPlayId);if(!p)return;
  p.q=document.getElementById('editQ').value;p.side=document.getElementById('editSide').value;p.type=document.getElementById('editType').value;p.start=Math.max(0,Math.min(100,Number(p.start)||0));p.end=Math.max(0,Math.min(100,Number(document.getElementById('editEnd').value)||0));p.yards=0;p.touchdown=false;p.defense=[];p.tacklers=[];
- if(p.side==='cass'&&p.type==='run'){p.runner=document.getElementById('editRunner')?.value||'';p.yards=playGain('cass',p.start,p.end);p.touchdown=p.end===100;}
- if(p.side==='cass'&&p.type==='pass'){p.passer=document.getElementById('editPasser')?.value||'';p.receiver=document.getElementById('editReceiver')?.value||'';p.result=document.getElementById('editResult')?.value||'Complete';if(p.result==='Complete'){p.yards=playGain('cass',p.start,p.end);p.touchdown=p.end===100;}else p.yards=0;}
+ if(p.side==='cass'&&p.type==='run'){p.runner=document.getElementById('editRunner')?.value||'';p.yards=playGain('cass',p.start,p.end);p.touchdown=isTouchdownSpot('cass',p.end);}
+ if(p.side==='cass'&&p.type==='pass'){p.passer=document.getElementById('editPasser')?.value||'';p.receiver=document.getElementById('editReceiver')?.value||'';p.result=document.getElementById('editResult')?.value||'Complete';if(p.result==='Complete'){p.yards=playGain('cass',p.start,p.end);p.touchdown=isTouchdownSpot('cass',p.end);}else p.yards=0;}
  if(p.type==='special'){p.player=document.getElementById('editSpecialPlayer')?.value||'';p.special=document.getElementById('editSpecialType')?.value||'Punt';p.result=(p.special==='Field Goal'||p.special==='Onside Kick')?(document.getElementById('editSpecialResult')?.value||'Good'):'';p.safety=p.special==='Safety';p.points=p.safety?2:(p.special==='Conversion'?Number(p.points)||0:0);if(p.special==='Field Goal'||p.special==='Extra Point'||p.special==='Safety')p.yards=0;else p.yards=playGain(p.side,p.start,p.end);if(p.special==='Onside Kick')p.nextPossession=p.result==='Cass Tech'?'cass':'opponent';}
  if(p.type==='penalty'){p.player=document.getElementById('editPenPlayer')?.value||'TEAM|Team';p.penalty=document.getElementById('editPenType')?.value||'Holding';p.penYards=Number(document.getElementById('editPenYards')?.value)||0;p.yards=0;}
  if(p.side==='opponent'&&(p.type==='run'||p.type==='pass'||p.type==='special')){p.yards=playGain('opponent',p.start,p.end);p.tacklers=[...document.querySelectorAll('.edit-tack.selected')].map(b=>b.dataset.value);p.defense=[...document.querySelectorAll('.edit-def:checked')].map(x=>x.value);}
@@ -1114,17 +1119,17 @@ function saveEdit(){
 }
 function deletePlay(id){if(confirm("Delete this play?")){plays=plays.filter(p=>p.id!==id);save();renderAll()}}
 function stats(gameFilter){
- let out={}; players.forEach((x,i)=>out[i]={num:x.n,name:x.name,cmp:0,att:0,passY:0,car:0,rushY:0,rec:0,recY:0,tack:0,sack:0,int:0,pbu:0,ff:0,fr:0});
+ let out={}; players.forEach((x,i)=>out[i]={num:x.n,name:x.name,cmp:0,att:0,passY:0,passTD:0,passInt:0,sacksTaken:0,qbr:null,car:0,rushY:0,rushTD:0,rushLong:0,rec:0,recY:0,recTD:0,recLong:0,tgt:0,tack:0,solo:0,sack:0,tfl:0,pbu:0,qbHits:0,int:0,ff:0,fr:0,fum:0,lost:0});
  const addDef=(value,key)=>{const idx=players.findIndex(x=>`${x.n}|${x.name}`===value);if(idx>=0)out[idx][key]++;};
  plays.filter(p=>!gameFilter||p.game===gameFilter).forEach(p=>{
   if(p.side==="cass"){
-   if(p.type==="run"){const idx=players.findIndex(x=>`${x.n}|${x.name}`===p.runner);if(idx>=0){out[idx].car++;out[idx].rushY+=Number(p.yards)||0;}}
-   if(p.type==="pass"){const qi=players.findIndex(x=>`${x.n}|${x.name}`===p.passer),ri=players.findIndex(x=>`${x.n}|${x.name}`===p.receiver);if(qi>=0){out[qi].att++;if(p.result==="Complete"){out[qi].cmp++;out[qi].passY+=Number(p.yards)||0;}}if(ri>=0&&p.result==="Complete"){out[ri].rec++;out[ri].recY+=Number(p.yards)||0;}}
+   if(p.type==="run"){const idx=players.findIndex(x=>`${x.n}|${x.name}`===p.runner);if(idx>=0){out[idx].car++;out[idx].rushY+=Number(p.yards)||0;out[idx].rushLong=Math.max(out[idx].rushLong,Number(p.yards)||0);if(p.touchdown)out[idx].rushTD++;}}
+   if(p.type==="pass"){const qi=players.findIndex(x=>`${x.n}|${x.name}`===p.passer),ri=players.findIndex(x=>`${x.n}|${x.name}`===p.receiver);if(qi>=0){out[qi].att++;if(p.result==="Complete"){out[qi].cmp++;out[qi].passY+=Number(p.yards)||0;if(p.touchdown)out[qi].passTD++;}else if(p.result==="Interception"){out[qi].passInt++;}}if(ri>=0){out[ri].tgt++;if(p.result==="Complete"){out[ri].rec++;out[ri].recY+=Number(p.yards)||0;out[ri].recLong=Math.max(out[ri].recLong,Number(p.yards)||0);if(p.touchdown)out[ri].recTD++;}}}
   }else{
-   (p.tacklers||[]).forEach(t=>addDef(t,'tack'));
+   (p.tacklers||[]).forEach(t=>{addDef(t,'tack');if((p.tacklers||[]).length===1)addDef(t,'solo');});
    const credits=p.defenseCredits||{};
    Object.entries(credits).forEach(([key,value])=>(Array.isArray(value)?value:[value]).filter(Boolean).forEach(v=>addDef(v,key)));
-   (p.defense||[]).forEach(d=>{if(credits[d])return;});
+   if(!Object.keys(credits).length && (p.tacklers||[])[0]) (p.defense||[]).forEach(d=>addDef((p.tacklers||[])[0],d));
   }
  });
  return Object.values(out).filter(x=>x.car||x.att||x.rec||x.tack||x.sack||x.int||x.pbu||x.ff||x.fr)
@@ -1155,18 +1160,51 @@ function buildTeamStatbook(rows,leftName,rightName,title){
  ${section('Penalties',row('Penalties',L.penalties,R.penalties)+row('Penalty Yards',L.penaltyY,R.penaltyY))}
  ${section('Scoring',row('Touchdowns',L.td,R.td)+row('Field Goals',L.fgs,R.fgs)+row('Conversion Points',L.conversions,R.conversions))}</div>`;
 }
+function individualSection(title,columns,rows,teamRow){
+ const head=columns.map(c=>`<th>${c[0]}</th>`).join('');
+ const body=rows.map(x=>`<tr>${columns.map(c=>`<td>${c[1](x)}</td>`).join('')}</tr>`).join('');
+ const total=teamRow?`<tr class="stat-team-total">${columns.map((c,i)=>`<td>${i===0?'<strong>TEAM</strong>':`<strong>${teamRow[i-1]??''}</strong>`}</td>`).join('')}</tr>`:'';
+ return `<section class="individual-stat-section"><div class="individual-stat-title"><span class="stat-section-logo">CT</span><strong>Cass Tech ${title}</strong></div><div class="individual-stat-scroll"><table class="individual-stat-table"><thead><tr>${head}</tr></thead><tbody>${body}${total}</tbody></table></div></section>`;
+}
+function buildIndividualStatHTML(s){
+ const active=s.filter(x=>x.car||x.att||x.rec||x.tack||x.sack||x.int||x.pbu||x.ff||x.fr);
+ if(!active.length)return '<div class="empty">Players appear here after they record a statistic.</div>';
+ const player=x=>`<strong>${x.name}</strong> <span class="player-num">${x.num}</span>`;
+ const sortBy=(rows,key)=>[...rows].sort((a,b)=>(Number(b[key])||0)-(Number(a[key])||0)||a.name.localeCompare(b.name));
+ const passers=sortBy(active.filter(x=>x.att),'att');
+ const rushers=sortBy(active.filter(x=>x.car),'car');
+ const receivers=sortBy(active.filter(x=>x.rec),'rec');
+ const def=sortBy(active.filter(x=>x.tack||x.sack||x.int||x.pbu||x.ff||x.fr),'tack');
+ const sum=(rows,key)=>rows.reduce((a,x)=>a+(Number(x[key])||0),0);
+ const avg=(rows,totalKey,yardKey)=>sum(rows,totalKey)?(sum(rows,yardKey)/sum(rows,totalKey)).toFixed(1):'0.0';
+ const max=(rows,key)=>Math.max(0,...rows.map(x=>Number(x[key])||0));
+ const passing=passers.length?individualSection('Passing',[
+  ['Player',player],['C/ATT',x=>`${x.cmp}/${x.att}`],['YDS',x=>x.passY],['AVG',x=>x.att?(x.passY/x.att).toFixed(1):'0.0'],
+  ['TD',x=>x.passTD||0],['INT',x=>x.passInt||0],['SACKS',x=>x.sacksTaken||0],['QBR',x=>x.qbr??'—']
+ ],passers,[`${sum(passers,'cmp')}/${sum(passers,'att')}`,sum(passers,'passY'),avg(passers,'att','passY'),sum(passers,'passTD'),sum(passers,'passInt'),sum(passers,'sacksTaken'),'—']):'';
+ const rushing=rushers.length?individualSection('Rushing',[
+  ['Player',player],['CAR',x=>x.car],['YDS',x=>x.rushY],['AVG',x=>x.car?(x.rushY/x.car).toFixed(1):'0.0'],['TD',x=>x.rushTD||0],['LONG',x=>x.rushLong||0]
+ ],rushers,[sum(rushers,'car'),sum(rushers,'rushY'),avg(rushers,'car','rushY'),sum(rushers,'rushTD'),max(rushers,'rushLong')]):'';
+ const receiving=receivers.length?individualSection('Receiving',[
+  ['Player',player],['REC',x=>x.rec],['YDS',x=>x.recY],['AVG',x=>x.rec?(x.recY/x.rec).toFixed(1):'0.0'],['TD',x=>x.recTD||0],['LONG',x=>x.recLong||0],['TGT',x=>x.tgt||0]
+ ],receivers,[sum(receivers,'rec'),sum(receivers,'recY'),avg(receivers,'rec','recY'),sum(receivers,'recTD'),max(receivers,'recLong'),sum(receivers,'tgt')]):'';
+ const defense=def.length?individualSection('Defense',[
+  ['Player',player],['TOT',x=>x.tack],['SOLO',x=>x.solo||0],['SACKS',x=>x.sack],['TFL',x=>x.tfl||0],['PD',x=>x.pbu],['QB HITS',x=>x.qbHits||0]
+ ],def,[sum(def,'tack'),sum(def,'solo'),sum(def,'sack'),sum(def,'tfl'),sum(def,'pbu'),sum(def,'qbHits')]):'';
+ const ints=sortBy(def.filter(x=>x.int),'int');
+ const interceptions=ints.length?individualSection('Interceptions',[
+  ['Player',player],['INT',x=>x.int]
+ ],ints,[sum(ints,'int')]):'';
+ const fumbles=sortBy(def.filter(x=>x.ff||x.fr),'ff');
+ const fumbleSection=fumbles.length?individualSection('Fumbles',[
+  ['Player',player],['FUM',x=>x.fum||0],['LOST',x=>x.lost||0],['REC',x=>x.fr],['FF',x=>x.ff]
+ ],fumbles,[sum(fumbles,'fum'),sum(fumbles,'lost'),sum(fumbles,'fr'),sum(fumbles,'ff')]):'';
+ return `<div class="individual-statbook">${passing}${rushing}${receiving}${defense}${interceptions}${fumbleSection}</div>`;
+}
 function renderStats(){
- let s=stats();
- const off=s.filter(x=>x.car||x.att||x.rec);
- const def=s.filter(x=>x.tack||x.sack||x.int||x.pbu||x.ff||x.fr);
- document.getElementById("individualStats").innerHTML=`
- <h3 style="margin-top:0">Offense</h3>
- ${off.length?`<table><thead><tr><th>Player</th><th>Cmp/Att</th><th>Pass Yds</th><th>Car</th><th>Rush Yds</th><th>Rec</th><th>Rec Yds</th></tr></thead><tbody>${off.map(x=>`<tr><td><strong>${x.num}</strong> ${x.name}</td><td>${x.cmp}/${x.att}</td><td>${x.passY}</td><td>${x.car}</td><td>${x.rushY}</td><td>${x.rec}</td><td>${x.recY}</td></tr>`).join("")}</tbody></table>`:'<div class="empty">Log offensive plays to generate offensive statistics.</div>'}
- <h3 style="margin:26px 0 10px">Defense</h3>
- ${def.length?`<table><thead><tr><th>Player</th><th>Tackles</th><th>Sacks</th><th>INT</th><th>PBU</th><th>FF</th><th>FR</th></tr></thead><tbody>${def.map(x=>`<tr><td><strong>${x.num}</strong> ${x.name}</td><td>${x.tack}</td><td>${x.sack}</td><td>${x.int}</td><td>${x.pbu}</td><td>${x.ff}</td><td>${x.fr}</td></tr>`).join("")}</tbody></table>`:'<div class="empty">Log opponent plays and select Cass defensive players to generate defensive statistics.</div>'}`;
- const gid=null;
- const rows=plays;
- document.getElementById("teamStats").innerHTML=buildTeamStatbook(rows,"Cass Tech","Opponents","Season Team Stats");
+ const s=stats();
+ document.getElementById('individualStats').innerHTML=buildIndividualStatHTML(s);
+ document.getElementById('teamStats').innerHTML=buildTeamStatbook(plays,'Cass Tech','Opponents','Season Team Stats');
 }
 
 function scoreForGame(gid){
@@ -1252,11 +1290,11 @@ function renderCurrentBoxScore(){
 }
 function renderCurrentStats(){
  const gid=document.getElementById('gameSelect')?.value; if(!gid)return;
- const s=stats(gid), off=s.filter(x=>x.car||x.att||x.rec), def=s.filter(x=>x.tack||x.sack||x.int||x.pbu||x.ff||x.fr);
+ const s=stats(gid);
  const i=document.getElementById('currentIndividualStats');
- i.innerHTML=`<h3 style="margin-top:0">Individual Stats</h3>${off.length?`<h4>Offense</h4><div style="overflow-x:auto"><table><thead><tr><th>Player</th><th>Cmp/Att</th><th>Pass Yds</th><th>Car</th><th>Rush Yds</th><th>Rec</th><th>Rec Yds</th></tr></thead><tbody>${off.map(x=>`<tr><td><strong>${x.num}</strong> ${x.name}</td><td>${x.cmp}/${x.att}</td><td>${x.passY}</td><td>${x.car}</td><td>${x.rushY}</td><td>${x.rec}</td><td>${x.recY}</td></tr>`).join('')}</tbody></table></div>`:''}${def.length?`<h4 style="margin-top:22px">Defense</h4><div style="overflow-x:auto"><table><thead><tr><th>Player</th><th>Tackles</th><th>Sacks</th><th>INT</th><th>PBU</th><th>FF</th><th>FR</th></tr></thead><tbody>${def.map(x=>`<tr><td><strong>${x.num}</strong> ${x.name}</td><td>${x.tack}</td><td>${x.sack}</td><td>${x.int}</td><td>${x.pbu}</td><td>${x.ff}</td><td>${x.fr}</td></tr>`).join('')}</tbody></table></div>`:''}${!off.length&&!def.length?'<div class="empty">Players appear here only after they record a statistic in this game.</div>':''}`;
+ i.innerHTML=`<h3 style="margin-top:0">Individual Stats</h3>${buildIndividualStatHTML(s)}`;
  const t=document.getElementById('currentTeamStats');
- t.innerHTML=buildTeamStatbook(plays.filter(p=>p.game===gid),"Cass Tech",currentOpponentName(),"Team Stats");
+ t.innerHTML=buildTeamStatbook(plays.filter(p=>p.game===gid),'Cass Tech',currentOpponentName(),'Team Stats');
 }
 function renderCurrentGame(){renderCurrentScoreboard();renderCurrentBoxScore();renderCurrentStats();}
 function setCurrentGameTab(tab){
@@ -1348,6 +1386,6 @@ renderStats();
 renderCurrentGame();
 if(pendingConversion) setTimeout(()=>showConversionPopup(pendingConversion.side),50);
 </script>
-<footer id="refreshTime" style="text-align:center;padding:18px 12px 28px;color:#6b7280;font-size:12px;border-top:1px solid #e5e7eb;margin-top:28px;">Refresh Time: <strong>September 10, 2026 12:50:22 AM EDT</strong></footer>
+<footer id="refreshTime" style="text-align:center;padding:18px 12px 28px;color:#6b7280;font-size:12px;border-top:1px solid #e5e7eb;margin-top:28px;">Refresh Time: <strong>September 10, 2026 2:08:36 AM EDT</strong></footer>
 </body>
 </html>
