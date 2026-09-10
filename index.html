@@ -598,9 +598,24 @@ function advanceDownDistance(down,distance,gain){
  if(down>=4) return {down:1,distance:10,turnover:true};
  return {down:down+1,distance:Math.max(1,distance-g),firstDown:false};
 }
+function enforceOpeningKickoff(){
+ const gid=document.getElementById("gameSelect")?.value;
+ if(!gid) return false;
+ const game=games.find(g=>g.id===gid);
+ const hasPlay=plays.some(p=>p.game===gid);
+ if(game && !game.final && !hasPlay){
+   type="special";
+   startY=40;
+   endY=40;
+   document.querySelectorAll(".type-btn").forEach(b=>b.classList.toggle("active",b.dataset.type==="special"));
+   return true;
+ }
+ return false;
+}
 function controls(){
  const dc=document.getElementById("dynamicControls");
  clearRosterSelections();
+ const openingKickoff=enforceOpeningKickoff();
  const possession=document.getElementById("possession")?.value||"cass";
  const opp=possession==="opponent";
  const logBtn=document.getElementById('logPlayBtn');
@@ -697,6 +712,17 @@ function logPlay(){
  if(gameObj?.final){ alert("This game has ended. Stats are locked and no more plays can be logged."); return; }
  const possession=document.getElementById("possession").value;
  if(!game)return;
+ const openingPlay=!plays.some(p=>p.game===game);
+ if(openingPlay && !(type==="special" && selected("specialType")==="Kickoff")){
+   alert("The first play of the game must be a kickoff.");
+   type="special";
+   startY=40;
+   endY=40;
+   document.querySelectorAll(".type-btn").forEach(b=>b.classList.toggle("active",b.dataset.type==="special"));
+   controls();
+   renderField();
+   return;
+ }
  const dd=currentDownDistance(game), down=dd.down, distance=dd.distance;
  let p={id:"p"+Date.now(),game,q,type,side:possession,start:startY,end:endY,yards:endY-startY,defense:[],tacklers:[],touchdown:false,nextStart:startY,nextDown:down,nextDistance:distance};
  let gain=0, switchPossession=false;
@@ -1032,8 +1058,16 @@ function setCurrentGameTab(tab){
 function syncStartFromGame(){
   const gid=document.getElementById('gameSelect')?.value;
   const latest=plays.find(p=>p.game===gid);
-  startY=latest && Number.isFinite(Number(latest.nextStart)) ? Number(latest.nextStart) : 15;
-  endY=startY;
+  if(latest){
+    startY=Number.isFinite(Number(latest.nextStart)) ? Number(latest.nextStart) : 15;
+    endY=startY;
+  } else {
+    startY=40;
+    endY=40;
+    fieldFlipped=false;
+    type="special";
+    document.querySelectorAll(".type-btn").forEach(b=>b.classList.toggle("active",b.dataset.type==="special"));
+  }
 }
 function renderQuarterButtons(){
   document.querySelectorAll('.quarter-btn').forEach(b=>b.classList.toggle('active',b.dataset.quarter===quarter));
@@ -1058,7 +1092,15 @@ document.querySelectorAll(".quarter-btn").forEach(b=>b.onclick=()=>{quarter=b.da
 document.querySelectorAll(".type-btn").forEach(b=>b.onclick=()=>{document.querySelectorAll(".type-btn").forEach(x=>x.classList.remove("active"));b.classList.add("active");type=b.dataset.type;controls();renderField();});
 document.querySelectorAll('.current-tab').forEach(b=>b.onclick=()=>setCurrentGameTab(b.dataset.cgtab));
 document.querySelectorAll(".tab").forEach(b=>b.onclick=()=>{document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active"));b.classList.add("active");document.getElementById("individualStats").style.display=b.dataset.stab==="individual"?"block":"none";document.getElementById("teamStats").style.display=b.dataset.stab==="team"?"block":"none";});
-document.getElementById("gameSelect").onchange=()=>{syncStartFromGame();updatePossessionOptions();renderPlayLog();renderField();};
+document.getElementById("gameSelect").onchange=()=>{
+  syncStartFromGame();
+  updatePossessionOptions();
+  enforceOpeningKickoff();
+  renderQuarterButtons();
+  controls();
+  renderPlayLog();
+  renderField();
+};
 let lastPossession=document.getElementById("possession")?.value||"cass";
 document.getElementById("possession").onchange=()=>{
   const next=document.getElementById("possession").value;
