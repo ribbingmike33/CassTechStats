@@ -100,6 +100,9 @@ select:focus,input:focus{border-color:var(--navy)}
  .bottom-nav .bn-icon{font-size:22px;line-height:1}
 }
 
+
+.team-statbook{margin-top:2px;border:1px solid var(--line);border-radius:14px;overflow:hidden;background:#fff}.team-statbook-title{font-size:20px;font-weight:950;padding:16px 14px 12px}.team-stat-head,.team-stat-row{display:grid;grid-template-columns:minmax(150px,1fr) minmax(82px,.55fr) minmax(82px,.55fr);align-items:center}.team-stat-head{background:#17352A;color:#fff;padding:11px 12px;text-transform:uppercase;letter-spacing:.4px;font-size:11px}.team-stat-head strong{text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.team-stat-section{border-top:1px solid var(--line)}.team-stat-section-title{padding:10px 12px;background:#EAF4F0;font-weight:950;font-size:14px;color:var(--ink)}.team-stat-row{min-height:44px;padding:0 12px;border-top:1px solid #E7EFEB;font-size:13px}.team-stat-row>div:not(.team-stat-label){text-align:right;font-weight:850}.team-stat-label{color:#3F5F54}.team-stat-row:nth-child(odd){background:#FBFDFC}
+@media(max-width:800px){.team-statbook-title{font-size:18px}.team-stat-head,.team-stat-row{grid-template-columns:minmax(130px,1fr) minmax(78px,.6fr) minmax(78px,.6fr)}.team-stat-head{font-size:10px;padding:10px 9px}.team-stat-row{padding:0 9px;font-size:12px}.team-stat-section-title{padding:9px;font-size:13px}}
 .player-chips{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;max-height:310px;overflow:auto;padding:2px}
 .player-chip,.def-btn{border:1px solid var(--line);background:#fff;color:var(--navy);border-radius:9px;padding:10px 8px;text-align:left;font-weight:800;min-width:0;overflow:hidden}.player-chip strong,.player-chip span{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .player-chip span{display:block;font-size:13px;color:var(--ink);font-weight:800;margin-top:2px}.player-chip em{display:none}
@@ -1007,6 +1010,42 @@ function stats(gameFilter){
   }
  });return Object.values(out).filter(x=>x.car||x.att||x.rec||x.tack||x.sack||x.int||x.pbu||x.ff||x.fr)
 }
+function buildTeamStatbook(rows, leftName, rightName, title){
+ const esc=x=>String(x??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+ const calc=side=>{
+  const ps=rows.filter(p=>p.side===side);
+  const scrim=ps.filter(p=>p.type==='run'||p.type==='pass');
+  const runs=ps.filter(p=>p.type==='run');
+  const passes=ps.filter(p=>p.type==='pass');
+  const special=ps.filter(p=>p.type==='special');
+  const pens=ps.filter(p=>p.type==='penalty' && (p.penaltyBy||p.side)===side);
+  const passAtt=passes.length, cmp=passes.filter(p=>p.result==='Complete').length;
+  const passY=passes.reduce((a,p)=>a+(Number(p.yards)||0),0);
+  const rushY=runs.reduce((a,p)=>a+(Number(p.yards)||0),0);
+  const totalY=passY+rushY, totalPlays=scrim.length;
+  const firstDowns=scrim.filter(p=>Number(p.nextDown)===1).length + pens.filter(p=>p.penaltyBy!==side).length;
+  const third= scrim.filter(p=>Number(p.nextDown)===1 && Number(p.down)===3);
+  const fourth= scrim.filter(p=>Number(p.nextDown)===1 && Number(p.down)===4);
+  const td=ps.filter(p=>p.touchdown).length;
+  const fgs=ps.filter(p=>p.type==='special'&&p.special==='Field Goal'&&p.result==='Good').length;
+  const turnovers=passes.filter(p=>p.result==='Interception').length + ps.filter(p=>p.side===side && (p.defense||[]).includes('fr')).length;
+  const penaltyY=pens.reduce((a,p)=>a+(Number(p.penYards)||0),0);
+  return {passAtt,cmp,passY,rushAtt:runs.length,rushY,totalY,totalPlays,firstDowns,third,fourth,td,fgs,turnovers,penaltyY,penalties:pens.length,special};
+ };
+ const L=calc('cass'), R=calc('opponent');
+ const fmtEff=(x)=>x.length?`${x.filter(p=>Number(p.nextDown)===1).length}-${x.length}`:'0-0';
+ const val=(a,b,decimals=false)=>`${decimals?(a.totalPlays?(a.totalY/a.totalPlays).toFixed(1):'0.0'):a}||${decimals?(b.totalPlays?(b.totalY/b.totalPlays).toFixed(1):'0.0'):b}`;
+ const row=(label,a,b,cls='')=>`<div class="team-stat-row ${cls}"><div class="team-stat-label">${label}</div><div>${a}</div><div>${b}</div></div>`;
+ const section=(label,content)=>`<div class="team-stat-section"><div class="team-stat-section-title">${label}</div>${content}</div>`;
+ return `<div class="team-statbook"><div class="team-statbook-title">${esc(title||'Team Stats')}</div><div class="team-stat-head"><div></div><strong>${esc(leftName)}</strong><strong>${esc(rightName)}</strong></div>
+ ${section('First Downs',row('Total 1st Downs',L.firstDowns,R.firstDowns)+row('Rushing 1st Downs',L.runs.filter(p=>Number(p.nextDown)===1).length,R.runs.filter(p=>Number(p.nextDown)===1).length)+row('Passing 1st Downs',L.passes.filter(p=>Number(p.nextDown)===1).length,R.passes.filter(p=>Number(p.nextDown)===1).length)+row('3rd Down Efficiency',fmtEff(L.third),fmtEff(R.third))+row('4th Down Efficiency',fmtEff(L.fourth),fmtEff(R.fourth)))}
+ ${section('Total Offense',row('Total Plays',L.totalPlays,R.totalPlays)+row('Total Yards',L.totalY,R.totalY)+row('Yards per Play',L.totalPlays?(L.totalY/L.totalPlays).toFixed(1):'0.0',R.totalPlays?(R.totalY/R.totalPlays).toFixed(1):'0.0')+row('Touchdowns',L.td,R.td))}
+ ${section('Passing',row('Passing Yards',L.passY,R.passY)+row('Comp / Att',`${L.cmp} / ${L.passAtt}`,`${R.cmp} / ${R.passAtt}`)+row('Yards per Pass',L.passAtt?(L.passY/L.passAtt).toFixed(1):'0.0',R.passAtt?(R.passY/R.passAtt).toFixed(1):'0.0')+row('Interceptions Thrown',L.turnovers,R.turnovers))}
+ ${section('Rushing',row('Rushing Yards',L.rushY,R.rushY)+row('Rushing Attempts',L.rushAtt,R.rushAtt)+row('Yards per Rush',L.rushAtt?(L.rushY/L.rushAtt).toFixed(1):'0.0',R.rushAtt?(R.rushY/R.rushAtt).toFixed(1):'0.0'))}
+ ${section('Penalties',row('Penalties',L.penalties,R.penalties)+row('Penalty Yards',L.penaltyY,R.penaltyY))}
+ ${section('Scoring',row('Touchdowns',L.td,R.td)+row('Field Goals',L.fgs,R.fgs))}
+ </div>`;
+}
 function renderStats(){
  let s=stats();
  const off=s.filter(x=>x.car||x.att||x.rec);
@@ -1016,11 +1055,11 @@ function renderStats(){
  ${off.length?`<table><thead><tr><th>Player</th><th>Cmp/Att</th><th>Pass Yds</th><th>Car</th><th>Rush Yds</th><th>Rec</th><th>Rec Yds</th></tr></thead><tbody>${off.map(x=>`<tr><td><strong>${x.num}</strong> ${x.name}</td><td>${x.cmp}/${x.att}</td><td>${x.passY}</td><td>${x.car}</td><td>${x.rushY}</td><td>${x.rec}</td><td>${x.recY}</td></tr>`).join("")}</tbody></table>`:'<div class="empty">Log offensive plays to generate offensive statistics.</div>'}
  <h3 style="margin:26px 0 10px">Defense</h3>
  ${def.length?`<table><thead><tr><th>Player</th><th>Tackles</th><th>Sacks</th><th>INT</th><th>PBU</th><th>FF</th><th>FR</th></tr></thead><tbody>${def.map(x=>`<tr><td><strong>${x.num}</strong> ${x.name}</td><td>${x.tack}</td><td>${x.sack}</td><td>${x.int}</td><td>${x.pbu}</td><td>${x.ff}</td><td>${x.fr}</td></tr>`).join("")}</tbody></table>`:'<div class="empty">Log opponent plays and select Cass defensive players to generate defensive statistics.</div>'}`;
- let att=s.reduce((a,x)=>a+x.att,0),cmp=s.reduce((a,x)=>a+x.cmp,0),passY=s.reduce((a,x)=>a+x.passY,0),car=s.reduce((a,x)=>a+x.car,0),rush=s.reduce((a,x)=>a+x.rushY,0),rec=s.reduce((a,x)=>a+x.rec,0),recY=s.reduce((a,x)=>a+x.recY,0);
- const oppY=plays.filter(p=>p.side==="opponent"&&(p.type==="run"||p.type==="pass"||p.type==="special")).reduce((a,p)=>a+p.yards,0);
- const pens=plays.filter(p=>p.type==="penalty").reduce((a,p)=>a+(p.penYards||0),0);
- document.getElementById("teamStats").innerHTML=`<div class="statgrid"><div class="stat"><b>${att}</b><span>Pass Attempts</span></div><div class="stat"><b>${passY}</b><span>Passing Yards</span></div><div class="stat"><b>${car}</b><span>Rush Attempts</span></div><div class="stat"><b>${rush}</b><span>Rushing Yards</span></div><div class="stat"><b>${cmp}</b><span>Completions</span></div><div class="stat"><b>${rec}</b><span>Receptions</span></div><div class="stat"><b>${recY}</b><span>Receiving Yards</span></div><div class="stat"><b>${oppY}</b><span>Opponent Yards Logged</span></div><div class="stat"><b>${pens}</b><span>Penalty Yards Logged</span></div></div>`;
+ const gid=null;
+ const rows=plays;
+ document.getElementById("teamStats").innerHTML=buildTeamStatbook(rows,"Cass Tech","Opponents","Season Team Stats");
 }
+
 function scoreForGame(gid){
  const arr=plays.filter(p=>p.game===gid);
  let cass=0,opp=0;
@@ -1104,8 +1143,7 @@ function renderCurrentStats(){
  const i=document.getElementById('currentIndividualStats');
  i.innerHTML=`<h3 style="margin-top:0">Individual Stats</h3>${off.length?`<h4>Offense</h4><div style="overflow-x:auto"><table><thead><tr><th>Player</th><th>Cmp/Att</th><th>Pass Yds</th><th>Car</th><th>Rush Yds</th><th>Rec</th><th>Rec Yds</th></tr></thead><tbody>${off.map(x=>`<tr><td><strong>${x.num}</strong> ${x.name}</td><td>${x.cmp}/${x.att}</td><td>${x.passY}</td><td>${x.car}</td><td>${x.rushY}</td><td>${x.rec}</td><td>${x.recY}</td></tr>`).join('')}</tbody></table></div>`:''}${def.length?`<h4 style="margin-top:22px">Defense</h4><div style="overflow-x:auto"><table><thead><tr><th>Player</th><th>Tackles</th><th>Sacks</th><th>INT</th><th>PBU</th><th>FF</th><th>FR</th></tr></thead><tbody>${def.map(x=>`<tr><td><strong>${x.num}</strong> ${x.name}</td><td>${x.tack}</td><td>${x.sack}</td><td>${x.int}</td><td>${x.pbu}</td><td>${x.ff}</td><td>${x.fr}</td></tr>`).join('')}</tbody></table></div>`:''}${!off.length&&!def.length?'<div class="empty">Players appear here only after they record a statistic in this game.</div>':''}`;
  const t=document.getElementById('currentTeamStats');
- const att=s.reduce((a,x)=>a+x.att,0),cmp=s.reduce((a,x)=>a+x.cmp,0),passY=s.reduce((a,x)=>a+x.passY,0),car=s.reduce((a,x)=>a+x.car,0),rush=s.reduce((a,x)=>a+x.rushY,0),rec=s.reduce((a,x)=>a+x.rec,0),recY=s.reduce((a,x)=>a+x.recY,0),oppY=plays.filter(p=>p.game===gid&&p.side==='opponent'&&['run','pass','special'].includes(p.type)).reduce((a,p)=>a+p.yards,0),pens=plays.filter(p=>p.game===gid&&p.type==='penalty').reduce((a,p)=>a+(p.penYards||0),0);
- t.innerHTML=`<h3 style="margin-top:0">Team Stats</h3><div class="statgrid"><div class="stat"><b>${att}</b><span>Pass Attempts</span></div><div class="stat"><b>${passY}</b><span>Passing Yards</span></div><div class="stat"><b>${car}</b><span>Rush Attempts</span></div><div class="stat"><b>${rush}</b><span>Rushing Yards</span></div><div class="stat"><b>${cmp}</b><span>Completions</span></div><div class="stat"><b>${rec}</b><span>Receptions</span></div><div class="stat"><b>${recY}</b><span>Receiving Yards</span></div><div class="stat"><b>${oppY}</b><span>Opponent Yards Logged</span></div><div class="stat"><b>${pens}</b><span>Penalty Yards Logged</span></div></div>`;
+ t.innerHTML=buildTeamStatbook(plays.filter(p=>p.game===gid),"Cass Tech",currentOpponentName(),"Team Stats");
 }
 function renderCurrentGame(){renderCurrentScoreboard();renderCurrentBoxScore();renderCurrentStats();}
 function setCurrentGameTab(tab){
