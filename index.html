@@ -457,6 +457,19 @@ try{
    if(ls.lastPossession) lastPossession=ls.lastPossession; if(ls.pendingConversion) pendingConversion=ls.pendingConversion; if(typeof ls.kickoffRequired==='boolean') kickoffRequired=ls.kickoffRequired;
  }
 }catch(_){ }
+// Normalize persisted state against the actual latest play. Older builds could
+// leave the UI on Special Teams after a possession change or leave a stale
+// kickoff flag in localStorage. The play log is the source of truth.
+try{
+ const gid=document.getElementById("gameSelect")?.value;
+ const latest=plays.find(p=>p.game===gid);
+ if(latest){
+   if(latest.special==="Kickoff") kickoffRequired=false;
+   if(latest.nextPossession && !pendingConversion && !kickoffRequired) type="run";
+   if(latest.nextPossession) lastPossession=latest.nextPossession;
+   fieldFlipped=lastPossession==="opponent";
+ }
+}catch(_){ }
 // Absolute field coordinate: 0 = Cass Tech goal line, 50 = midfield, 100 = opponent goal line.
 function playGain(side,start,end){
  const a=Number(start)||0,b=Number(end)||0;
@@ -514,9 +527,14 @@ function renderGameSelect(){
  if(ordered.some(g=>g.id===current))select.value=current;
  updatePossessionOptions();
 }
+function syncFieldPerspective(){
+  const possession=document.getElementById("possession")?.value||lastPossession||"cass";
+  fieldFlipped=possession==="opponent";
+  return possession;
+}
 function renderField(){
  const field=document.getElementById("fieldUI");
- const possession=document.getElementById("possession")?.value||"cass";
+ const possession=syncFieldPerspective();
  if(type==="penalty"){
    field.innerHTML='<div class="empty" style="height:100%;display:grid;place-items:center"><div><strong>Penalty selected</strong><br><span class="muted">Penalties do not require field placement.</span></div></div>';
    return;
@@ -525,7 +543,6 @@ function renderField(){
  const labels=[10,20,30,40,50,40,30,20,10];
  const labelPositions=[18,26,34,42,50,58,66,74,82];
  field.innerHTML=`<div class="field-wrap">
- <div class="field-flip"><button type="button" onclick="flipField()">↔ ${fieldFlipped?'Flip to Cass Left':'Flip Field'}</button></div>
  <div class="field-info"><span>${leftIsCass?'CASS TECH':currentOpponentName()}</span><span>${leftIsCass?currentOpponentName():'CASS TECH'}</span></div>
  <div class="field" id="field">
  <div class="endzone ez-left"><span>${leftIsCass?'CASS TECH':currentOpponentName()}</span></div><div class="endzone ez-right"><span>${leftIsCass?currentOpponentName():'CASS TECH'}</span></div>
@@ -538,7 +555,7 @@ function renderField(){
    </div>
    <div class="yard-control">
      <div class="yard-control-head"><strong>End Yard Line</strong><span class="yard-value" id="endYardValue">${yardLineLabel(endY)}</span></div>
-     <input class="yard-range" id="endYardRange" type="range" min="0" max="100" step="1" value="${endY}" ${fieldFlipped?'dir="rtl"':''} oninput="setYard('end',this.value)">
+     <input class="yard-range" id="endYardRange" type="range" min="0" max="100" step="1" value="${fieldFlipped?100-endY:endY}" oninput="setYardFromSlider(this.value)">
      <div class="yard-ticks"><span>0</span><span>10</span><span>20</span><span>30</span><span>40</span><span>50</span><span>40</span><span>30</span><span>20</span><span>10</span><span>0</span></div>
      <div class="yard-buttons"><button type="button" onclick="adjustYard('end',5)">+5</button><button type="button" onclick="adjustYard('end',1)">+1</button><button type="button" onclick="adjustYard('end',-1)">−1</button><button type="button" onclick="adjustYard('end',-5)">−5</button></div>
    </div>
@@ -546,13 +563,14 @@ function renderField(){
  </div>`;
  positionBalls(); enableDrag(document.getElementById("endBall"),false);
 }
-function flipField(){ fieldFlipped=!fieldFlipped; saveLiveState(); renderField(); }
 function yardToPct(y){
+ syncFieldPerspective();
  const n=Math.max(0,Math.min(100,Number(y)||0));
  const base=10+(n*0.8);
  return fieldFlipped ? 100-base : base;
 }
 function pctToY(p){
+ syncFieldPerspective();
  const visual=fieldFlipped ? 100-Number(p) : Number(p);
  return Math.max(0,Math.min(100,Math.round((visual-10)/0.8)));
 }
@@ -563,16 +581,22 @@ function yardLineLabel(y){
 
 function setYard(which,value){
   const y=Math.max(0,Math.min(100,Number(value)||0));
-  if(which==='start') return; else endY=y;
-  const range=document.getElementById(which+'YardRange');
-  const out=document.getElementById(which+'YardValue');
-  if(range) range.value=y; if(out) out.textContent=yardLineLabel(y);
+  if(which==='start') return;
+  endY=y;
+  const range=document.getElementById('endYardRange');
+  const out=document.getElementById('endYardValue');
+  if(range) range.value=fieldFlipped?100-y:y;
+  if(out) out.textContent=yardLineLabel(y);
   saveLiveState(); positionBalls();
+}
+function setYardFromSlider(value){
+  const visual=Math.max(0,Math.min(100,Number(value)||0));
+  setYard('end',fieldFlipped?100-visual:visual);
 }
 function adjustYard(which,delta){
   if(which==='start') return;
   const current=endY;
-  const possession=document.getElementById('possession')?.value||lastPossession||'cass';
+  const possession=syncFieldPerspective();
   // Buttons always mean football yardage: +1/+5 moves the ball forward
   // for the team in possession, regardless of the absolute field coordinate.
   // Cass drives toward 100; the opponent drives toward 0.
@@ -597,6 +621,7 @@ function enableDrag(el,isStart){
  };
  const stop=e=>{
   el.onpointermove=null;
+  setYard('end',endY);
   try{el.releasePointerCapture(e.pointerId)}catch(_){}
  };
  el.onpointerdown=e=>{
@@ -674,27 +699,29 @@ function currentDownDistance(gid){
  if(latest && Number.isFinite(Number(latest.nextDown))) return {down:Number(latest.nextDown),distance:Number(latest.nextDistance)||10};
  return {down:1,distance:10};
 }
-function flipPossessionAndPerspective(){
- const next=lastPossession==="cass"?"opponent":"cass";
- lastPossession=next;
- return {possession:next};
-}
 function advanceDownDistance(down,distance,gain){
  const g=Number(gain)||0;
  if(g>=distance) return {down:1,distance:10,firstDown:true};
  if(down>=4) return {down:1,distance:10,turnover:true};
  return {down:down+1,distance:Math.max(1,distance-g),firstDown:false};
 }
+function setPlayType(nextType){
+  const allowed=new Set(["run","pass","special","penalty"]);
+  type=allowed.has(nextType)?nextType:"run";
+  document.querySelectorAll("#cg-logstats .type-btn[data-type]").forEach(b=>b.classList.toggle("active",b.dataset.type===type));
+  return type;
+}
+
 function enforceOpeningKickoff(){
  const gid=document.getElementById("gameSelect")?.value;
  if(!gid) return false;
  const game=games.find(g=>g.id===gid);
  const hasPlay=plays.some(p=>p.game===gid);
- if(game && !game.final && !hasPlay){
-   type="special";
+ const mustKickoff=!!(game && !game.final && (!hasPlay || kickoffRequired));
+ if(mustKickoff){
+   setPlayType("special");
    startY=35;
    endY=35;
-   document.querySelectorAll(".type-btn").forEach(b=>b.classList.toggle("active",b.dataset.type==="special"));
    return true;
  }
  return false;
@@ -708,12 +735,15 @@ function syncFieldToLatestPlay(gid){
    endY=startY;
  }
  if(latest.nextPossession){
+   const next=latest.nextPossession;
    const sel=document.getElementById('possession');
-   if(sel) sel.value=latest.nextPossession;
-   lastPossession=latest.nextPossession;
-   // Visual direction follows the team that now has the ball.
-   // This is display-only; playGain() always uses absolute coordinates.
-   fieldFlipped=latest.nextPossession==='opponent';
+   if(sel) sel.value=next;
+   lastPossession=next;
+   // Orientation is visual only; the stored field coordinate never flips.
+   fieldFlipped=next==='opponent';
+   // Possession changes begin a normal scrimmage sequence unless a scoring
+   // event explicitly left a kickoff pending.
+   if(!kickoffRequired && !pendingConversion) setPlayType('run');
  }
 }
 function controls(){
@@ -843,7 +873,7 @@ function completeConversion(id,label,points){
  plays.unshift(p); pendingConversion=null;
  localStorage.removeItem("ct_pending_conversion");
  const modal=document.getElementById("conversionModal"); if(modal){modal.classList.remove("open");modal.setAttribute("aria-hidden","true");}
- type="special";startY=35;endY=35;fieldFlipped=false;lastPossession=side;kickoffRequired=true;
+ setPlayType("special");startY=35;endY=35;fieldFlipped=false;lastPossession=side;kickoffRequired=true;
  const possessionEl=document.getElementById("possession"); if(possessionEl) possessionEl.value=side;
  save();
  // A conversion is part of the Current Game workflow. Always return the user to that tab.
@@ -862,7 +892,7 @@ function logPlay(){
  lastPossession=possession;
  const openingPlay=!plays.some(p=>p.game===game);
  if(openingPlay && !(type==="special" && selected("specialType")==="Kickoff")){
-   type="special";startY=35;endY=35;controls();renderField();saveLiveState();
+   setPlayType("special");startY=35;endY=35;controls();renderField();saveLiveState();
    alert("The first play of the game must be a kickoff from the 35-yard line."); return;
  }
  const dd=currentDownDistance(game), down=dd.down, distance=dd.distance;
@@ -896,6 +926,7 @@ function logPlay(){
  }
  if(type==="special"){
    p.special=selected("specialType")||"Punt";
+   if(p.special==="Kickoff") kickoffRequired=false;
    p.result=(p.special==="Field Goal"||p.special==="Onside Kick")?(selected("specialResult")||"Good"):"";
    if(["Punt Return","Kick Return"].includes(p.special)){gain=playGain(possession,startY,endY);p.yards=gain;p.touchdown=endY===(possession==="cass"?100:0);}
    else if(["Punt","Kickoff","Blocked Kick","Onside Kick"].includes(p.special)){gain=playGain(possession,startY,endY);p.yards=gain;}
@@ -936,13 +967,13 @@ function logPlay(){
  if(touchdown && !p.scoringSide)p.scoringSide=possession;
  if(touchdown){
    p.nextDown=1;p.nextDistance=10;p.nextStart=35;p.nextPossession=possession;
-   plays.unshift(p);save();type="special";startY=35;endY=35;fieldFlipped=false;lastPossession=possession;
+   plays.unshift(p);setPlayType("special");startY=35;endY=35;fieldFlipped=false;lastPossession=possession;save();
    const pe=document.getElementById("possession");if(pe)pe.value=possession;
    controls();renderField();renderPlayLog();renderStats();renderCurrentGame();showConversionPopup(possession);return;
  }
  if(fieldGoalGood){
    p.nextDown=1;p.nextDistance=10;p.nextStart=35;p.nextPossession=possession;kickoffRequired=true;
-   plays.unshift(p);save();type="special";startY=35;endY=35;fieldFlipped=false;lastPossession=possession;
+   plays.unshift(p);setPlayType("special");startY=35;endY=35;fieldFlipped=false;lastPossession=possession;save();
    const pe=document.getElementById("possession");if(pe)pe.value=possession;
    controls();renderField();renderPlayLog();renderStats();renderCurrentGame();
    setTimeout(()=>document.querySelector("#cg-logstats .controls .type-grid")?.scrollIntoView({behavior:"smooth",block:"start"}),80);return;
@@ -953,9 +984,13 @@ function logPlay(){
    // Keep the visual field direction aligned with the new offense. This is
    // display-only; absolute field coordinates and yardage never depend on it.
    fieldFlipped=next==='opponent';
+   setPlayType('run');
    startY=Number.isFinite(Number(p.nextStart))?Number(p.nextStart):endY;endY=startY;
  }else{startY=p.nextStart;endY=startY;}
- plays.unshift(p);save();syncFieldToLatestPlay(game);renderPlayLog();renderStats();renderCurrentGame();controls();renderField();
+ plays.unshift(p);
+ syncFieldToLatestPlay(game);
+ save();
+ renderPlayLog();renderStats();renderCurrentGame();controls();renderField();
  setTimeout(()=>document.querySelector("#cg-logstats .controls .type-grid")?.scrollIntoView({behavior:"smooth",block:"start"}),80);
 }
 function renderPlayLog(){
@@ -1052,7 +1087,6 @@ function stats(gameFilter){
  plays.filter(p=>!gameFilter||p.game===gameFilter).forEach(p=>{
   if(p.side==="cass"){
    if(p.type==="run"){const idx=players.findIndex(x=>`${x.n}|${x.name}`===p.runner);if(idx>=0){out[idx].car++;out[idx].rushY+=Number(p.yards)||0;}}
-   if(p.special==="Kickoff")kickoffRequired=false;
    if(p.type==="pass"){const qi=players.findIndex(x=>`${x.n}|${x.name}`===p.passer),ri=players.findIndex(x=>`${x.n}|${x.name}`===p.receiver);if(qi>=0){out[qi].att++;if(p.result==="Complete"){out[qi].cmp++;out[qi].passY+=Number(p.yards)||0;}}if(ri>=0&&p.result==="Complete"){out[ri].rec++;out[ri].recY+=Number(p.yards)||0;}}
   }else{
    (p.tacklers||[]).forEach(t=>addDef(t,'tack'));
@@ -1139,7 +1173,7 @@ function resetGame(){
  game.final=false;
  delete game.finalAt;
  delete game.finalScore;
- type="special";
+ setPlayType("special");
  quarter="1";
  fieldFlipped=false;
  startY=35;
@@ -1203,11 +1237,29 @@ function syncStartFromGame(){
   const gid=document.getElementById('gameSelect')?.value;
   const latest=plays.find(p=>p.game===gid);
   if(latest){
-    startY=Number.isFinite(Number(latest.nextStart))?Number(latest.nextStart):35;endY=startY;
-    if(latest.nextPossession)lastPossession=latest.nextPossession;
-    const pe=document.getElementById('possession');if(pe)pe.value=lastPossession;
+    startY=Number.isFinite(Number(latest.nextStart))?Number(latest.nextStart):35;
+    endY=startY;
+    if(latest.nextPossession) lastPossession=latest.nextPossession;
+    const pe=document.getElementById('possession');
+    if(pe)pe.value=lastPossession;
+
+    // Reconstruct the UI state from the game's last play. A completed kickoff
+    // never leaves a kickoff requirement behind; a normal turnover never
+    // leaves the next play on Special Teams.
+    if(latest.special==='Kickoff') kickoffRequired=false;
+    if(latest.nextPossession && !pendingConversion && !kickoffRequired) setPlayType('run');
     fieldFlipped=lastPossession==='opponent';
-  }else{startY=35;endY=35;fieldFlipped=false;type='special';lastPossession='cass';const pe=document.getElementById('possession');if(pe)pe.value='cass';document.querySelectorAll('.type-btn').forEach(b=>b.classList.toggle('active',b.dataset.type==='special'));}
+  }else{
+    startY=35;
+    endY=35;
+    fieldFlipped=false;
+    kickoffRequired=false;
+    pendingConversion=null;
+    setPlayType('special');
+    lastPossession='cass';
+    const pe=document.getElementById('possession');
+    if(pe)pe.value='cass';
+  }
   saveLiveState();
 }
 function renderQuarterButtons(){
@@ -1230,7 +1282,7 @@ function showPage(id){
 }
 document.querySelectorAll(".navbtn,.bottom-nav button").forEach(b=>b.onclick=()=>showPage(b.dataset.page));
 document.querySelectorAll(".quarter-btn").forEach(b=>b.onclick=()=>{quarter=b.dataset.quarter;saveLiveState();renderQuarterButtons();});
-document.querySelectorAll(".type-btn").forEach(b=>b.onclick=()=>{document.querySelectorAll(".type-btn").forEach(x=>x.classList.remove("active"));b.classList.add("active");type=b.dataset.type;controls();renderField();});
+document.querySelectorAll("#cg-logstats .type-btn[data-type]").forEach(b=>b.onclick=()=>{setPlayType(b.dataset.type);controls();renderField();saveLiveState();});
 document.querySelectorAll('.current-tab').forEach(b=>b.onclick=()=>setCurrentGameTab(b.dataset.cgtab));
 document.querySelectorAll(".tab").forEach(b=>b.onclick=()=>{document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active"));b.classList.add("active");document.getElementById("individualStats").style.display=b.dataset.stab==="individual"?"block":"none";document.getElementById("teamStats").style.display=b.dataset.stab==="team"?"block":"none";});
 document.getElementById("gameSelect").onchange=()=>{
@@ -1249,6 +1301,7 @@ document.getElementById("possession").onchange=()=>{
   // Keep the field visually oriented toward the current offense.
   // Yardage calculations remain independent of this display flag.
   fieldFlipped=next==='opponent';
+  if(!kickoffRequired && !pendingConversion) setPlayType('run');
   saveLiveState();
   controls();renderField();
 };
@@ -1256,5 +1309,6 @@ document.addEventListener("change",updatePreview);document.addEventListener("inp
 renderAll();
 if(pendingConversion) setTimeout(()=>showConversionPopup(pendingConversion.side),50);
 </script>
+<footer id="refreshTime" style="text-align:center;padding:18px 12px 28px;color:#6b7280;font-size:12px;border-top:1px solid #e5e7eb;margin-top:28px;">Refresh Time: <strong>September 10, 2026 12:50:22 AM EDT</strong></footer>
 </body>
 </html>
