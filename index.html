@@ -5,7 +5,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Cass Tech Stats">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>Cass Tech Football — Technicians Stats</title>
 <style>
 :root{
@@ -14,6 +14,7 @@
   --good:#087443; --danger:#b42318;
 }
 *{box-sizing:border-box}
+html,body{width:100%;max-width:100%;overflow-x:hidden}
 body{margin:0;background:var(--bg);font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:var(--ink)}
 button,input,select{font:inherit}
 button{cursor:pointer}
@@ -46,6 +47,15 @@ select:focus,input:focus{border-color:var(--navy)}
 .badge{display:inline-block;border-radius:999px;padding:4px 8px;font-size:10px;font-weight:900;text-transform:uppercase;background:#EAF4F0;color:var(--navy)}
 .hero{background:linear-gradient(135deg,#eaf6f1,#d7eee5);color:#17352A;border:1px solid #bfd8ce;border-radius:16px;padding:22px;margin-bottom:16px;position:relative;overflow:hidden}.hero:after{content:"CT";position:absolute;right:24px;top:50%;transform:translateY(-50%);font-size:120px;font-weight:950;line-height:1;color:#006B4F12;letter-spacing:-12px}.hero .score,.hero small{position:relative;z-index:1}.hero small{opacity:.78}.hero .score{color:#006B4F}
 .hero .score{font-size:40px;font-weight:950;letter-spacing:-1px}.hero small{opacity:.7;text-transform:uppercase;font-weight:800}
+
+.game-setup-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
+.game-setup-toggle{border:1px solid var(--line);background:#EAF4F0;color:var(--navy);border-radius:9px;padding:8px 12px;font-weight:850}
+.game-setup.collapsed .game-setup-body{display:none}
+.current-scoreboard{background:var(--navy);color:#fff;border-radius:14px;padding:14px 18px;margin-bottom:12px;overflow:hidden}
+.scoreboard-top{display:flex;justify-content:space-between;gap:20px;align-items:center}
+.score-team{font-size:12px;font-weight:850;text-transform:uppercase;letter-spacing:.6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:45vw}
+.score-num{font-size:38px;font-weight:950;line-height:1.05}
+
 .play-layout{display:grid;grid-template-columns:340px 1fr;gap:16px}
 .type-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin-bottom:16px}
 .type-btn{padding:12px 5px;border:1px solid var(--line);background:#fff;border-radius:9px;font-weight:850;color:#477264}
@@ -54,11 +64,11 @@ select:focus,input:focus{border-color:var(--navy)}
 .field{position:relative;width:100%;height:min(250px,30vw);min-height:190px;border:2px solid #fff;border-radius:8px;overflow:hidden;background:repeating-linear-gradient(to right,#087A59 0,#087A59 9.09%,#006B4F 9.09%,#006B4F 18.18%)}
 .field:before{content:"";position:absolute;inset:0;background:repeating-linear-gradient(to right,transparent 0,transparent calc(9.09% - 1px),#ffffffb5 calc(9.09% - 1px),#ffffffb5 9.09%)}
 .endzone{position:absolute;top:0;bottom:0;width:10%;background:#004F3A;border-bottom:1px solid #fff;border-top:1px solid #fff;display:grid;place-items:center;color:#fff;font-size:8px;font-weight:950;letter-spacing:.6px;text-align:center;line-height:1.05;padding:2px;z-index:2;overflow:hidden}
-.ez-left{left:0}.ez-right{right:0}.endzone span{max-width:100%;overflow:hidden}
+.ez-left{left:0}.ez-right{right:0}.endzone span{max-width:100%;overflow:hidden;display:block;writing-mode:vertical-rl;transform:rotate(180deg);font-size:7px;letter-spacing:.4px}
 .yl{position:absolute;top:50%;transform:translate(-50%,-50%);color:#fff;font-size:10px;font-weight:900;z-index:3;text-shadow:0 1px 2px #000}
-.ball{position:absolute;width:30px;height:30px;border-radius:50%;background:#9b5427;border:3px solid #fff;box-shadow:0 3px 8px #0008;z-index:10;transform:translate(-50%,-50%);touch-action:none;display:grid;place-items:center;color:#fff;font-size:12px;font-weight:900}
+.ball{position:absolute;width:30px;height:30px;border-radius:50%;background:#006B4F;border:3px solid #fff;box-shadow:0 3px 8px #0008;z-index:10;transform:translate(-50%,-50%);touch-action:none;display:grid;place-items:center;color:#fff;font-size:12px;font-weight:900}
 .ball:after{content:"";width:8px;height:3px;background:#fff;border-radius:2px;transform:rotate(90deg)}
-.endball{background:#b76b2f}
+.endball{background:#8B5A2B}
 .field-info{display:flex;justify-content:space-between;color:#fff;font-weight:850;margin:0 3px 9px;font-size:11px}.field-info span{max-width:44%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .yards{font-size:34px;font-weight:950;text-align:center;color:#fff;margin-top:9px}.yards small{font-size:12px;display:block;opacity:.7;text-transform:uppercase}
 .play-preview{margin-top:14px;background:#F1F8F5;border:1px solid var(--line);border-radius:10px;padding:13px;font-size:13px}
@@ -67,6 +77,7 @@ select:focus,input:focus{border-color:var(--navy)}
 .mobile-only{display:none}
 .bottom-nav{display:none}
 @media(max-width:800px){
+ body{overflow-x:hidden}
  .topbar{padding:calc(12px + env(safe-area-inset-top)) 14px 14px}
  .brand{gap:10px;align-items:center}
  .mark.actual-logo{width:56px;height:56px;flex:0 0 56px;padding:4px}
@@ -94,7 +105,7 @@ select:focus,input:focus{border-color:var(--navy)}
 .player-chip.selected,.def-btn.selected{background:var(--navy);color:#fff;border-color:var(--navy)}
 .player-chip.selected span{color:#fff;opacity:1}
 .def-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
-@media(max-width:800px){.player-chips{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}.player-chip{padding:10px 9px}.player-chip strong{font-size:16px}.player-chip span{font-size:12px}}
+@media(max-width:800px){.player-chips{grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.player-chip{padding:10px 7px;min-height:62px}.player-chip strong{font-size:15px}.player-chip span{font-size:12px}}
 .roster-grid{max-height:none}.modal{display:none;position:fixed;inset:0;z-index:100}.modal.open{display:block}.modal-backdrop{position:absolute;inset:0;background:#002c224d}.modal-card{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(680px,calc(100vw - 20px));max-width:calc(100vw - 20px);max-height:90dvh;overflow-y:auto;overflow-x:hidden;background:#fff;border:1px solid var(--line);border-radius:16px;box-shadow:0 20px 60px #002c2240;padding:18px}.modal-head{font-size:20px;margin-bottom:14px}.modal-close{border:0;background:#EAF4F0;color:var(--navy);width:36px;height:36px;border-radius:50%;font-size:24px;line-height:1}.modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:18px;padding-top:14px;border-top:1px solid var(--line);flex-wrap:wrap}.modal-actions .btn{min-width:110px}.edit-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;min-width:0}.edit-grid>*{min-width:0}.edit-grid input,.edit-grid select{max-width:100%;min-width:0}.edit-grid .full{grid-column:1/-1}.edit-yards{display:grid;grid-template-columns:1fr 1fr;gap:10px}.edit-checks{display:flex;flex-wrap:wrap;gap:7px}.edit-checks label{margin:0;text-transform:none;letter-spacing:0;background:#EAF4F0;border:1px solid var(--line);border-radius:8px;padding:8px 10px;color:var(--ink);font-size:12px}.edit-checks input{width:auto;margin-right:5px}.td-actions{white-space:nowrap}@media(max-width:800px){.edit-grid{grid-template-columns:1fr;gap:9px}.edit-grid .full{grid-column:auto}.modal-card{top:10px;transform:translateX(-50%);width:calc(100vw - 12px);max-width:calc(100vw - 12px);max-height:calc(100dvh - 20px);padding:14px}.modal-actions{position:sticky;bottom:0;background:#fff}.quarter-grid{gap:4px}.quarter-btn{padding:9px 2px;font-size:12px}}
 .field-flip{display:flex;justify-content:flex-end;margin-bottom:8px}.field-flip button{padding:8px 12px;border:1px solid #ffffff88;background:#ffffff18;color:#fff;border-radius:8px;font-size:11px;font-weight:900}.field-action-note{margin-top:10px;text-align:center;color:#fff;font-size:11px;font-weight:800;opacity:.82;line-height:1.35}
 
@@ -204,17 +215,20 @@ select:focus,input:focus{border-color:var(--navy)}
   </div>
   <div id="cg-logstats" class="current-panel">
 
-  <div class="card pad" style="margin-bottom:16px">
-    <div class="grid grid3">
-      <div><label>Game</label><select id="gameSelect"></select></div>
-      <div><label>Quarter</label><div class="quarter-grid" id="quarterButtons">
-        <button type="button" class="quarter-btn active" data-quarter="1">1st</button>
-        <button type="button" class="quarter-btn" data-quarter="2">2nd</button>
-        <button type="button" class="quarter-btn" data-quarter="3">3rd</button>
-        <button type="button" class="quarter-btn" data-quarter="4">4th</button>
-        <button type="button" class="quarter-btn" data-quarter="OT">OT</button>
-      </div></div>
-      <div><label>Possession</label><select id="possession"><option value="cass">Cass Tech</option><option value="opponent">Opponent</option></select></div>
+  <div class="card pad game-setup" id="gameSetup" style="margin-bottom:16px">
+    <div class="game-setup-head"><strong>Game Setup</strong><button type="button" class="game-setup-toggle" id="gameSetupToggle" onclick="toggleGameSetup()">⌃</button></div>
+    <div class="game-setup-body">
+      <div class="grid grid3">
+        <div><label>Game</label><select id="gameSelect"></select></div>
+        <div><label>Quarter</label><div class="quarter-grid" id="quarterButtons">
+          <button type="button" class="quarter-btn active" data-quarter="1">1st</button>
+          <button type="button" class="quarter-btn" data-quarter="2">2nd</button>
+          <button type="button" class="quarter-btn" data-quarter="3">3rd</button>
+          <button type="button" class="quarter-btn" data-quarter="4">4th</button>
+          <button type="button" class="quarter-btn" data-quarter="OT">OT</button>
+        </div></div>
+        <div><label>Possession</label><select id="possession"><option value="cass">Cass Tech</option><option value="opponent">Opponent</option></select></div>
+      </div>
     </div>
   </div>
   <div class="play-layout">
@@ -320,6 +334,7 @@ function addGame(){
 }
 function fmtDate(s){let [y,m,d]=s.split("-").map(Number);const months=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];return `${months[m-1]} ${d}, ${y}`}
 
+function toggleGameSetup(){const el=document.getElementById("gameSetup");if(el)el.classList.toggle("collapsed");}
 function currentOpponentName(){const game=games.find(g=>g.id===document.getElementById("gameSelect")?.value);return game?.opp||"Opponent";}
 function updatePossessionOptions(){
  const sel=document.getElementById("possession"); if(!sel)return;
@@ -333,8 +348,13 @@ function renderGameSelect(){
 }
 function renderField(){
  const field=document.getElementById("fieldUI");
+ const possession=document.getElementById("possession")?.value||"cass";
  if(type==="penalty"){
    field.innerHTML='<div class="empty" style="height:100%;display:grid;place-items:center"><div><strong>Penalty selected</strong><br><span class="muted">Penalties do not require field placement.</span></div></div>';
+   return;
+ }
+ if(possession==="opponent" && (type==="run" || type==="pass")){
+   field.innerHTML='<div class="empty" style="min-height:150px;display:grid;place-items:center"><div><strong>'+currentOpponentName()+' '+(type==="run"?"Run":"Pass")+'</strong><br><span class="muted">No field placement needed for opponent plays.</span></div></div>';
    return;
  }
  const leftIsCass=!fieldFlipped;
@@ -508,6 +528,7 @@ function controls(){
    document.querySelectorAll('.pen-preset').forEach(b=>b.onclick=()=>{document.querySelectorAll('.pen-preset').forEach(x=>x.classList.remove('active'));b.classList.add('active');document.getElementById('penYards').value=b.dataset.yards;updatePreview();});
  }
  if(!opp && (type==="run" || type==="pass")) renderPlayerChips();
+ if(opp && (type==="run" || type==="pass")) renderPlayerChips();
  wireDefButtons();
  wireRosterPickers();
  updatePreview();
@@ -568,10 +589,14 @@ function logPlay(){
      if(type==="special")p.special=selected("specialType");
      p.tacklers=getSelectedPlayers().map(x=>`${x.n}|${x.name}`);
      p.defense=getDefStats();
+     if(p.defense.includes("int") || p.defense.includes("fr")) switchPossession=true;
    }
    if(type==="penalty"){
      p.penalty=selected("penType");p.penPlayer=selected("penPlayer");p.penYards=Number(document.getElementById("penYards").value)||0;p.yards=0;
      gain=0;
+   }
+   if(switchPossession && (type==="run" || type==="pass" || type==="special")){
+     endY=Math.max(0,Math.min(100, fieldFlipped ? startY - gain : startY + gain));
    }
  } else {
    if(type==="run"){
@@ -594,13 +619,14 @@ function logPlay(){
  // Score-changing special teams plays are recorded but do not advance the scrimmage down.
  if(type==="special" && (p.special==="Field Goal" || p.special==="Extra Point")){
    p.nextDown=1;p.nextDistance=10;p.nextStart=startY;p.nextPossession=possession;
- } else if(type==="special" && p.special==="Kickoff"){
+ } else if(type==="special" && (p.special==="Kickoff" || p.special==="Punt")){
    p.nextDown=1;p.nextDistance=10;
-   plays.unshift(p);save();renderPlayLog();renderStats();renderCurrentGame();
-   startY=100-endY;endY=startY;fieldFlipped=!fieldFlipped;
+   plays.unshift(p);save();
+   const oldEnd=endY;
+   startY=100-oldEnd;endY=startY;fieldFlipped=!fieldFlipped;
    const possessionEl=document.getElementById("possession"); if(possessionEl)possessionEl.value=possession==="cass"?"opponent":"cass";
    p.nextStart=startY;p.nextPossession=possessionEl?.value||"cass";
-   save();controls();renderField();renderCurrentGame();return;
+   save();renderPlayLog();renderStats();renderCurrentGame();controls();renderField();return;
  } else if(type==="penalty"){
    const py=Number(p.penYards)||0;
    // Accepted penalty changes field position without consuming another play for this tracker.
@@ -630,7 +656,7 @@ function renderPlayLog(){
   let player=p.side==="opponent" ? opponentName : p.type==="run"?p.runner:p.type==="pass"?`${p.passer} → ${p.receiver}`:p.type==="penalty"?p.player:p.player;
   let defense=p.tacklers?.length?`Tackles: ${p.tacklers.map(x=>x.split("|")[0]).join(", ")}`:"";
   if(p.defense?.length) defense += `${defense?" · ":""}${p.defense.map(x=>({sack:"Sack",int:"INT",pbu:"PBU",ff:"FF",fr:"FR"}[x]||x)).join(", ")}`;
-  let result=p.touchdown?"TOUCHDOWN":p.type==="penalty"?`${p.penalty} (${p.penYards} yds)`:p.type==="special"?`${p.special} · ${p.yards} yds`:p.side==="opponent"?`${p.yards>=0?"+":""}${p.yards} yds`:p.type==="pass"?`${p.result} · ${p.yards} yds`:`${p.yards>=0?"+":""}${p.yards} yds`;
+  let result=p.touchdown?"TOUCHDOWN":p.type==="penalty"?`${p.penalty} (${p.penYards} yds)`:p.type==="special"?`${p.special} · ${p.yards} yds${p.nextPossession?" · TURNOVER":""}`:p.side==="opponent"?`${p.yards>=0?"+":""}${p.yards} yds${p.nextPossession?" · TURNOVER":""}`:p.type==="pass"?`${p.result} · ${p.yards} yds${p.nextPossession?" · TURNOVER":""}`:`${p.yards>=0?"+":""}${p.yards} yds${p.nextPossession?" · TURNOVER":""}`;
   return `<tr><td>${p.q}</td><td><span class="badge">${p.side==="opponent"?opponentName:"Cass"}</span></td><td><span class="badge">${p.type}</span></td><td>${player||"—"}${defense?`<div class="muted" style="font-size:11px;margin-top:4px">${defense}</div>`:""}</td><td>${result}</td><td class="td-actions"><button class="btn ghost" onclick="editPlay('${p.id}')">Edit</button> <button class="btn danger" onclick="deletePlay('${p.id}')">Delete</button></td></tr>`}).join("")}</tbody></table>`:'<div class="empty">No plays logged for this game.</div>';
 }
 function editPlayerOptions(selectedValue, role){
