@@ -72,7 +72,7 @@ select:focus,input:focus{border-color:var(--navy)}
 .endball{background:#8B5A2B}
 .field-info{display:flex;justify-content:space-between;color:#fff;font-weight:850;margin:0 3px 9px;font-size:11px}.field-info span{max-width:44%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .yards{font-size:34px;font-weight:950;text-align:center;color:#fff;margin-top:9px}.yards small{font-size:12px;display:block;opacity:.7;text-transform:uppercase}
-.play-preview{margin-top:14px;background:#F1F8F5;border:1px solid var(--line);border-radius:10px;padding:13px;font-size:13px}
+.play-preview{margin-top:14px;background:#F1F8F5;border:1px solid var(--line);border-radius:10px;padding:13px;font-size:13px}.play-preview strong:first-child{font-size:18px;color:#006B4F;font-weight:950}.log-distance-btn{margin-top:10px;width:100%;font-weight:900}
 .row{display:flex;align-items:center;justify-content:space-between;gap:10px}
 .muted{color:var(--muted)}.empty{padding:30px;text-align:center;color:var(--muted)}
 .mobile-only{display:none}
@@ -649,6 +649,7 @@ function enforceOpeningKickoff(){
  }
  return false;
 }
+function jumpToField(){ setTimeout(()=>document.querySelector('.field-card')?.scrollIntoView({behavior:'smooth',block:'start'}),40); }
 function controls(){
  const dc=document.getElementById("dynamicControls");
  clearRosterSelections();
@@ -667,12 +668,12 @@ function controls(){
  if(logBtn){logBtn.disabled=false;logBtn.textContent='Log Play';}
  if(type==="run"){
    dc.innerHTML=opp
-    ? `<label>${currentOpponentName()} Run</label><div style="margin-top:12px"><label>Cass Defensive Players — Tackles</label><div id="tackleChips" class="player-chips"></div></div><div style="margin-top:12px"><label>Defensive Result</label><div class="def-grid"><button class="def-btn" data-def="sack">Sack</button><button class="def-btn" data-def="ff">Fumble Caused</button><button class="def-btn" data-def="fr">Fumble Recovered</button></div></div>`
+    ? `<label>${currentOpponentName()} Run</label><button type="button" class="btn log-distance-btn" onclick="jumpToField()">Log Distance</button><div style="margin-top:12px"><label>Cass Defensive Players — Tackles</label><div id="tackleChips" class="player-chips"></div></div><div style="margin-top:12px"><label>Defensive Result</label><div class="def-grid"><button class="def-btn" data-def="sack">Sack</button><button class="def-btn" data-def="ff">Fumble Caused</button><button class="def-btn" data-def="fr">Fumble Recovered</button></div></div>`
     : rosterPicker("runner","Runner");
  }
  if(type==="pass"){
    dc.innerHTML=opp
-    ? `<label>${currentOpponentName()} Pass</label><div style="margin-top:12px"><label>Cass Defensive Players — Tackles</label><div id="tackleChips" class="player-chips"></div></div><div style="margin-top:12px"><label>Defensive Result</label><div class="def-grid"><button class="def-btn" data-def="sack">Sack</button><button class="def-btn" data-def="int">Interception</button><button class="def-btn" data-def="pbu">Pass Breakup</button><button class="def-btn" data-def="ff">Fumble Caused</button><button class="def-btn" data-def="fr">Fumble Recovered</button></div></div>`
+    ? `<label>${currentOpponentName()} Pass</label><button type="button" class="btn log-distance-btn" onclick="jumpToField()">Log Distance</button><div style="margin-top:12px"><label>Cass Defensive Players — Tackles</label><div id="tackleChips" class="player-chips"></div></div><div style="margin-top:12px"><label>Defensive Result</label><div class="def-grid"><button class="def-btn" data-def="sack">Sack</button><button class="def-btn" data-def="int">Interception</button><button class="def-btn" data-def="pbu">Pass Breakup</button><button class="def-btn" data-def="ff">Fumble Caused</button><button class="def-btn" data-def="fr">Fumble Recovered</button></div></div>`
     : `${rosterPicker("passer","Passer")}<div style="margin-top:12px">${rosterPicker("receiver","Receiver")}</div><div style="margin-top:12px"><label>Pass Result</label><select id="passResult"><option>Complete</option><option>Incomplete</option><option>Interception</option></select></div>`;
  }
  if(type==="special"){
@@ -690,7 +691,15 @@ function controls(){
    renderSpecialResult();
  }
  if(type==="penalty"){
-   dc.innerHTML=`<div class="picker-section" data-picker-role="penPlayer"><button type="button" class="picker-header" onclick="togglePicker('penPlayer')"><span>Player / Team</span><span class="picker-chevron">⌄</span></button><div class="picker-body role-picker" data-role="penPlayer" data-multi="false"><button type="button" class="player-chip selected single-chip" data-player="-1" data-role="penPlayer"><strong>TEAM</strong><span>Team</span></button>${players.map((p,i)=>`<button type="button" class="player-chip single-chip" data-player="${i}" data-role="penPlayer"><strong>${p.n}</strong><span>${lastName(p.name)}</span></button>`).join("")}</div></div><div style="margin-top:12px"><label>Penalty Yards</label><div class="type-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:8px"><button type="button" class="type-btn pen-preset" data-yards="5">5</button><button type="button" class="type-btn pen-preset active" data-yards="10">10</button><button type="button" class="type-btn pen-preset" data-yards="15">15</button><button type="button" class="type-btn pen-custom">Custom</button></div><input id="penYards" type="number" value="10" min="0" max="100" step="1" placeholder="Yardage" style="display:none"></div><div style="margin-top:12px"><label>Penalty</label><select id="penType"><option>Holding</option><option>False Start</option><option>Offside</option><option>Pass Interference</option><option>Personal Foul</option><option>Unsportsmanlike Conduct</option><option>Delay of Game</option><option>Other</option></select>`;
+   dc.innerHTML=`<div><label>Penalty By</label><select id="penaltyBy"><option value="cass">Cass Tech</option><option value="opponent">${currentOpponentName()}</option></select></div><div id="penaltyPlayerWrap" style="margin-top:12px"></div><div style="margin-top:12px"><label>Penalty Yards</label><div class="type-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:8px"><button type="button" class="type-btn pen-preset" data-yards="5">5</button><button type="button" class="type-btn pen-preset active" data-yards="10">10</button><button type="button" class="type-btn pen-preset" data-yards="15">15</button><button type="button" class="type-btn pen-custom">Custom</button></div><input id="penYards" type="number" inputmode="numeric" pattern="[0-9]*" value="10" min="0" max="100" step="1" placeholder="Yardage" style="display:none"></div><div style="margin-top:12px"><label>Penalty</label><select id="penType"><option>Holding</option><option>False Start</option><option>Offside</option><option>Pass Interference</option><option>Personal Foul</option><option>Unsportsmanlike Conduct</option><option>Delay of Game</option><option>Other</option></select>`;
+   const renderPenaltyPlayer=()=>{
+     const wrap=document.getElementById('penaltyPlayerWrap'); const by=document.getElementById('penaltyBy')?.value||'cass'; if(!wrap)return;
+     if(by==='opponent'){wrap.innerHTML='<div class="empty" style="padding:10px">Opponent team penalty — no individual opponent player needed.</div>';return;}
+     wrap.innerHTML=`<div class="picker-section" data-picker-role="penPlayer"><button type="button" class="picker-header" onclick="togglePicker('penPlayer')"><span>Cass Player / Team</span><span class="picker-chevron">⌄</span></button><div class="picker-body role-picker" data-role="penPlayer" data-multi="false"><button type="button" class="player-chip selected single-chip" data-player="-1" data-role="penPlayer"><strong>TEAM</strong><span>Team</span></button>${players.map((p,i)=>`<button type="button" class="player-chip single-chip" data-player="${i}" data-role="penPlayer"><strong>${p.n}</strong><span>${lastName(p.name)}</span></button>`).join('')}</div></div>`;
+     wireRosterPickers();
+   };
+   document.getElementById('penaltyBy')?.addEventListener('change',()=>{renderPenaltyPlayer();updatePreview();});
+   renderPenaltyPlayer();
    document.querySelectorAll('.pen-preset').forEach(b=>b.onclick=()=>{document.querySelectorAll('.pen-preset,.pen-custom').forEach(x=>x.classList.remove('active'));b.classList.add('active');const inp=document.getElementById('penYards');if(inp){inp.value=b.dataset.yards;inp.style.display='none';}updatePreview();});
    document.querySelectorAll('.pen-custom').forEach(b=>b.onclick=()=>{document.querySelectorAll('.pen-preset,.pen-custom').forEach(x=>x.classList.remove('active'));b.classList.add('active');const inp=document.getElementById('penYards');if(inp){inp.style.display='block';inp.focus();inp.select();}updatePreview();});
  }
@@ -721,8 +730,9 @@ function updatePreview(){
  if(type==="run"){
    if(opp){
      const y=fieldFlipped ? startY-endY : endY-startY;
+     const dd=currentDownDistance(document.getElementById("gameSelect")?.value);
      const tack=getSelectedPlayers().map(x=>x.n).join(", ")||"No tackler selected";
-     p.innerHTML=`<strong>${currentOpponentName()} Run</strong><br>${y>=0?"+":""}${y} yards · Tackles: ${tack}`;
+     p.innerHTML=`<strong>${dd.down} & ${dd.distance}</strong> · ${currentOpponentName()} Run<br>${y>=0?"+":""}${y} yards · Tackles: ${tack}`;
    } else {
      let v=chosenPlayer("runner");const dd=currentDownDistance(document.getElementById("gameSelect")?.value); p.innerHTML=`<strong>${dd.down} & ${dd.distance}</strong> · Cass Run<br>${v?`${v.n} ${v.name}`:"Select a runner"} · Start ${yardLineLabel(startY)} · End ${yardLineLabel(endY)}`;
    }
@@ -730,9 +740,10 @@ function updatePreview(){
  if(type==="pass"){
    if(opp){
      const y=fieldFlipped ? startY-endY : endY-startY;
+     const dd=currentDownDistance(document.getElementById("gameSelect")?.value);
      const tack=getSelectedPlayers().map(x=>x.n).join(", ")||"No tackler selected";
      const defs=getDefStats().join(", ")||"No defensive result";
-     p.innerHTML=`<strong>${currentOpponentName()} Pass</strong><br>${y>=0?"+":""}${y} yards · Tackles: ${tack} · ${defs}`;
+     p.innerHTML=`<strong>${dd.down} & ${dd.distance}</strong> · ${currentOpponentName()} Pass<br>${y>=0?"+":""}${y} yards · Tackles: ${tack} · ${defs}`;
    } else {
      let q=chosenPlayer("passer"),r=chosenPlayer("receiver"),res=selected("passResult"); const dd=currentDownDistance(document.getElementById("gameSelect")?.value); p.innerHTML=`<strong>${dd.down} & ${dd.distance}</strong> · Cass Pass<br>${q?`${q.n} ${q.name}`:"Select passer"} → ${r?`${r.n} ${r.name}`:"Select receiver"} · ${res||"Complete"} · Start ${yardLineLabel(startY)} · End ${yardLineLabel(endY)}`;
    }
@@ -743,7 +754,7 @@ function updatePreview(){
    const result=spType==="Field Goal" ? ` · ${selected("specialResult")||"Good"}` : "";
    p.innerHTML=`<strong>${opp?currentOpponentName():"Cass Tech"} Special Teams</strong><br>${spType}${result}${opp?` · ${y>=0?"+":""}${y} yards`:""}`;
  }
- if(type==="penalty"){let pp=chosenPlayer("penPlayer");p.innerHTML=`<strong>${opp?currentOpponentName():"Cass Tech"} Penalty</strong><br>${selected("penType")||"Select penalty"} · ${pp?`${pp.n} ${pp.name}`:"Team"} · ${document.getElementById("penYards")?.value||0} yards`; }
+ if(type==="penalty"){let pp=chosenPlayer("penPlayer"), by=selected("penaltyBy")||"cass", dd=currentDownDistance(document.getElementById("gameSelect")?.value);p.innerHTML=`<strong>${dd.down} & ${dd.distance}</strong> · ${by==="opponent"?currentOpponentName():"Cass Tech"} Penalty<br>${selected("penType")||"Select penalty"} · ${by==="opponent"?"Team":(pp?`${pp.n} ${pp.name}`:"Team")} · ${document.getElementById("penYards")?.value||0} yards`; }
 }
 function logPlay(){
  let game=document.getElementById("gameSelect").value,q=quarter;
@@ -781,7 +792,7 @@ function logPlay(){
      if(p.defense.includes("int") || p.defense.includes("fr")) switchPossession=true;
    }
    if(type==="penalty"){
-     p.penalty=selected("penType");p.penPlayer=selected("penPlayer");p.penYards=Number(document.getElementById("penYards").value)||0;p.yards=0;
+     p.penalty=selected("penType");p.penaltyBy=selected("penaltyBy")||possession;p.penPlayer=selected("penPlayer");p.penYards=Number(document.getElementById("penYards")?.value)||0;p.yards=0;
      gain=0;
    }
    if(switchPossession && (type==="run" || type==="pass" || type==="special")){
@@ -807,7 +818,7 @@ function logPlay(){
      else gain=playGain("cass",startY,endY,fieldFlipped);
      if(["Punt Return","Kick Return"].includes(p.special)) p.touchdown=endY===(fieldFlipped?0:100);
    }
-   if(type==="penalty"){p.penalty=selected("penType");let x=chosenPlayer("penPlayer");p.player=x?`${x.n}|${x.name}`:"TEAM|Team";p.penYards=Number(document.getElementById("penYards").value)||0;p.yards=0;gain=0;}
+   if(type==="penalty"){p.penalty=selected("penType");p.penaltyBy=selected("penaltyBy")||"cass";let x=chosenPlayer("penPlayer");p.player=p.penaltyBy==="opponent"?"TEAM|Team":(x?`${x.n}|${x.name}`:"TEAM|Team");p.penYards=Number(document.getElementById("penYards")?.value)||0;p.yards=0;gain=0;}
  }
  // Scoring plays do not advance scrimmage downs. After a TD or good FG/XP,
  // automatically prepare the next play as the scoring team's kickoff.
@@ -857,6 +868,15 @@ function logPlay(){
    renderPlayLog();renderStats();renderCurrentGame();controls();renderField();
    setTimeout(()=>document.querySelector("#cg-logstats .controls .type-grid")?.scrollIntoView({behavior:"smooth",block:"start"}),80);
    return;
+ } else if(type==="penalty") {
+   const penaltyBy=p.penaltyBy||possession;
+   const py=Math.max(0,Number(p.penYards)||0);
+   const acceptedSpot=penaltyBy===possession ? Math.max(0,startY-py) : Math.min(100,startY+py);
+   const automaticFirst=penaltyBy!==possession && ["Pass Interference","Personal Foul","Unsportsmanlike Conduct"].includes(p.penalty);
+   const nextDistance=automaticFirst ? 10 : (penaltyBy===possession ? distance+py : Math.max(1,distance-py));
+   p.start=startY; p.end=acceptedSpot; p.yards=0; p.nextStart=acceptedSpot;
+   p.nextDown=automaticFirst ? 1 : down; p.nextDistance=nextDistance;
+   startY=acceptedSpot; endY=startY;
  } else {
    const ddNext=advanceDownDistance(down,distance,gain);
    p.nextDown=ddNext.down;p.nextDistance=ddNext.distance;
@@ -1033,14 +1053,14 @@ function resetGame(){
  game.final=false;
  delete game.finalAt;
  delete game.finalScore;
- type="run";
+ type="special";
  quarter="1";
  fieldFlipped=false;
- startY=15;
- endY=15;
+ startY=40;
+ endY=40;
  const possessionEl=document.getElementById("possession");
  if(possessionEl) possessionEl.value="cass";
- document.querySelectorAll(".type-btn").forEach(b=>b.classList.toggle("active",b.dataset.type==="run"));
+ document.querySelectorAll(".type-btn").forEach(b=>b.classList.toggle("active",b.dataset.type==="special"));
  save();
  renderAll();
  const logPage=document.getElementById("log");
