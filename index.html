@@ -534,6 +534,10 @@ function adjustYard(which,delta){
 function positionBalls(){
  let a=document.getElementById("startBall"),b=document.getElementById("endBall"); if(!a)return;
  a.style.left=yardToPct(startY)+"%";a.style.top="30%"; b.style.left=yardToPct(endY)+"%";b.style.top="30%";
+ const range=document.getElementById("endYardRange");
+ const out=document.getElementById("endYardValue");
+ if(range) range.value=endY;
+ if(out) out.textContent=yardLineLabel(endY);
  updatePreview();
 }
 function enableDrag(el,isStart){
@@ -544,8 +548,7 @@ function enableDrag(el,isStart){
   const r=field.getBoundingClientRect();
   const pct=((e.clientX-r.left)/r.width)*100;
   const yard=pctToY(pct);
-  if(isStart) return; else endY=yard;
-  positionBalls();
+  if(isStart) return; else setYard('end',yard);
  };
  const stop=e=>{
   el.onpointermove=null;
