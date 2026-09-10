@@ -405,7 +405,35 @@ if(localStorage.getItem("ct_schedule_actual_scores_v1")!=="1"){
 }
 let plays=JSON.parse(localStorage.getItem("ct_plays")||"[]");
 let type="run", startY=15, endY=15, fieldFlipped=false, quarter="1";
+let gameState=JSON.parse(localStorage.getItem("ct_game_state_v1")||"{}");
+let savedGameId=localStorage.getItem("ct_selected_game_v1")||"";
 const save=()=>{localStorage.setItem("ct_games",JSON.stringify(games));localStorage.setItem("ct_plays",JSON.stringify(plays));};
+function saveGameState(){
+ const gid=document.getElementById("gameSelect")?.value;
+ if(!gid)return;
+ const poss=document.getElementById("possession")?.value||"cass";
+ gameState[gid]={startY,endY,fieldFlipped,quarter,type,possession:poss,updatedAt:Date.now()};
+ localStorage.setItem("ct_game_state_v1",JSON.stringify(gameState));
+ localStorage.setItem("ct_selected_game_v1",gid);
+}
+function restoreGameState(gid){
+ if(!gid)return;
+ savedGameId=gid;
+ localStorage.setItem("ct_selected_game_v1",gid);
+ const st=gameState[gid];
+ if(st){
+   startY=Math.max(0,Math.min(100,Number(st.startY)||0));
+   endY=Math.max(0,Math.min(100,Number(st.endY)||startY));
+   fieldFlipped=!!st.fieldFlipped;
+   quarter=st.quarter||"1";
+   type=st.type||"run";
+   updatePossessionOptions();
+   const sel=document.getElementById("possession");
+   if(sel && (st.possession==="cass"||st.possession==="opponent")) sel.value=st.possession;
+   return true;
+ }
+ return false;
+}
 // Yardage is always measured from the offense's perspective.
 // When the field is flipped, the offense is moving toward visual left;
 // otherwise it is moving toward visual right. The same formula applies to
@@ -460,7 +488,7 @@ function updatePossessionOptions(){
 function renderGameSelect(){
  const select=document.getElementById("gameSelect");
  if(!select)return;
- const current=select.value;
+ const current=select.value || savedGameId;
  // Keep live/upcoming games first. Once a game is marked Final, move it
  // to the bottom of the Current Game selector without changing schedule order.
  const ordered=[...games].sort((a,b)=>{
@@ -470,6 +498,9 @@ function renderGameSelect(){
  });
  select.innerHTML=ordered.map(g=>`<option value="${g.id}">${fmtDate(g.date)} — ${g.opp}${g.final?' — FINAL':''}</option>`).join("");
  if(ordered.some(g=>g.id===current))select.value=current;
+ else if(ordered.length)select.value=ordered[0].id;
+ savedGameId=select.value||savedGameId;
+ localStorage.setItem("ct_selected_game_v1",savedGameId);
  updatePossessionOptions();
 }
 function renderField(){
@@ -504,7 +535,7 @@ function renderField(){
  </div>`;
  positionBalls(); enableDrag(document.getElementById("endBall"),false);
 }
-function flipField(){ fieldFlipped=!fieldFlipped; renderField(); }
+function flipField(){ fieldFlipped=!fieldFlipped; saveGameState(); renderField(); }
 function yardToPct(y){
  const n=Math.max(0,Math.min(100,Number(y)||0));
  const base=10+(n*0.8);
@@ -525,6 +556,7 @@ function setYard(which,value){
   const range=document.getElementById(which+'YardRange');
   const out=document.getElementById(which+'YardValue');
   if(range) range.value=y; if(out) out.textContent=yardLineLabel(y);
+  saveGameState();
   positionBalls();
 }
 function adjustYard(which,delta){
@@ -851,6 +883,7 @@ function logPlay(){
    const possessionEl=document.getElementById("possession"); if(possessionEl)possessionEl.value=possession;
    controls();renderField();
    const st=document.getElementById("specialType"); if(st){st.value="Kickoff";st.dispatchEvent(new Event("change"));}
+   saveGameState();
    renderPlayLog();renderStats();renderCurrentGame();
    setTimeout(()=>document.querySelector("#cg-logstats .controls .type-grid")?.scrollIntoView({behavior:"smooth",block:"start"}),80);
    return;
@@ -885,6 +918,7 @@ function logPlay(){
    p.touchback=isTouchback;
 
    save();
+   saveGameState();
    renderPlayLog();renderStats();renderCurrentGame();controls();renderField();
    setTimeout(()=>document.querySelector("#cg-logstats .controls .type-grid")?.scrollIntoView({behavior:"smooth",block:"start"}),80);
    return;
@@ -912,7 +946,7 @@ function logPlay(){
  } else {
    plays.unshift(p);
  }
- save();syncFieldToLatestPlay(game);renderPlayLog();renderStats();renderCurrentGame();controls();renderField();
+ save();syncFieldToLatestPlay(game);saveGameState();renderPlayLog();renderStats();renderCurrentGame();controls();renderField();
  setTimeout(()=>document.querySelector("#cg-logstats .controls .type-grid")?.scrollIntoView({behavior:"smooth",block:"start"}),80);
 }
 function renderPlayLog(){
@@ -1156,6 +1190,8 @@ function resetGame(){
    : `Reset ${game.opp||'this game'}? This will clear its score and final status.`;
  if(!window.confirm(msg))return;
  plays=plays.filter(p=>p.game!==gid);
+ delete gameState[gid];
+ localStorage.setItem("ct_game_state_v1",JSON.stringify(gameState));
  game.cass=null;
  game.oppScore=null;
  game.final=false;
@@ -1223,17 +1259,38 @@ function setCurrentGameTab(tab){
 }
 function syncStartFromGame(){
   const gid=document.getElementById('gameSelect')?.value;
-  const latest=plays.find(p=>p.game===gid);
-  if(latest){
-    startY=Number.isFinite(Number(latest.nextStart)) ? Number(latest.nextStart) : 15;
-    endY=startY;
-  } else {
-    startY=35;
-    endY=35;
-    fieldFlipped=false;
-    type="special";
-    document.querySelectorAll(".type-btn").forEach(b=>b.classList.toggle("active",b.dataset.type==="special"));
+  if(!gid)return;
+  const restored=restoreGameState(gid);
+  if(!restored){
+    const latest=plays.find(p=>p.game===gid);
+    if(latest){
+      startY=Number.isFinite(Number(latest.nextStart)) ? Number(latest.nextStart) : 35;
+      endY=startY;
+      // Existing plays created before persistent field state: reconstruct the
+      // field direction by replaying possession-changing plays from kickoff.
+      let flipped=false;
+      plays.filter(p=>p.game===gid).slice().reverse().forEach(p=>{
+        if(p.nextPossession && p.nextPossession!==p.side) flipped=!flipped;
+      });
+      fieldFlipped=flipped;
+      type=latest.nextType||type||"run";
+      if(latest.nextQuarter) quarter=latest.nextQuarter;
+      if(latest.nextPossession){
+        updatePossessionOptions();
+        const sel=document.getElementById('possession'); if(sel)sel.value=latest.nextPossession;
+      }
+    } else {
+      startY=35;
+      endY=35;
+      fieldFlipped=false;
+      type="special";
+      quarter="1";
+      updatePossessionOptions();
+      const sel=document.getElementById('possession'); if(sel)sel.value="cass";
+    }
   }
+  saveGameState();
+  document.querySelectorAll(".type-btn").forEach(b=>b.classList.toggle("active",b.dataset.type===type));
 }
 function renderQuarterButtons(){
   document.querySelectorAll('.quarter-btn').forEach(b=>b.classList.toggle('active',b.dataset.quarter===quarter));
@@ -1254,18 +1311,22 @@ function showPage(id){
   if(id==='log')renderCurrentGame();
 }
 document.querySelectorAll(".navbtn,.bottom-nav button").forEach(b=>b.onclick=()=>showPage(b.dataset.page));
-document.querySelectorAll(".quarter-btn").forEach(b=>b.onclick=()=>{quarter=b.dataset.quarter;renderQuarterButtons();});
-document.querySelectorAll(".type-btn").forEach(b=>b.onclick=()=>{document.querySelectorAll(".type-btn").forEach(x=>x.classList.remove("active"));b.classList.add("active");type=b.dataset.type;controls();renderField();});
+document.querySelectorAll(".quarter-btn").forEach(b=>b.onclick=()=>{quarter=b.dataset.quarter;saveGameState();renderQuarterButtons();});
+document.querySelectorAll(".type-btn").forEach(b=>b.onclick=()=>{document.querySelectorAll(".type-btn").forEach(x=>x.classList.remove("active"));b.classList.add("active");type=b.dataset.type;saveGameState();controls();renderField();});
 document.querySelectorAll('.current-tab').forEach(b=>b.onclick=()=>setCurrentGameTab(b.dataset.cgtab));
 document.querySelectorAll(".tab").forEach(b=>b.onclick=()=>{document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active"));b.classList.add("active");document.getElementById("individualStats").style.display=b.dataset.stab==="individual"?"block":"none";document.getElementById("teamStats").style.display=b.dataset.stab==="team"?"block":"none";});
 document.getElementById("gameSelect").onchange=()=>{
+  savedGameId=document.getElementById("gameSelect").value||"";
+  localStorage.setItem("ct_selected_game_v1",savedGameId);
   syncStartFromGame();
   updatePossessionOptions();
   enforceOpeningKickoff();
+  saveGameState();
   renderQuarterButtons();
   controls();
   renderPlayLog();
   renderField();
+  renderCurrentGame();
 };
 let lastPossession=document.getElementById("possession")?.value||"cass";
 document.getElementById("possession").onchange=()=>{
@@ -1276,6 +1337,7 @@ document.getElementById("possession").onchange=()=>{
     endY=100-endY;
     lastPossession=next;
   }
+  saveGameState();
   controls();renderField();
 };
 document.addEventListener("change",updatePreview);document.addEventListener("input",updatePreview);
