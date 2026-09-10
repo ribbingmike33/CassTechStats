@@ -590,7 +590,9 @@ function renderField(){
      <div class="yard-control-head"><strong>End Yard Line</strong><span class="yard-value" id="endYardValue">${yardLineLabel(endY)}</span></div>
      <input class="yard-range" id="endYardRange" type="range" min="0" max="100" step="1" value="${endY}" oninput="setYardFromSlider(this.value)">
      <div class="yard-ticks"><span>0</span><span>10</span><span>20</span><span>30</span><span>40</span><span>50</span><span>40</span><span>30</span><span>20</span><span>10</span><span>0</span></div>
-     <div class="yard-buttons"><button type="button" onclick="adjustYard('end',5)">+5</button><button type="button" onclick="adjustYard('end',1)">+1</button><button type="button" onclick="adjustYard('end',-1)">−1</button><button type="button" onclick="adjustYard('end',-5)">−5</button></div>
+     <div class="yard-buttons">${possession==='cass'
+       ? `<button type="button" onclick="adjustYard('end',-5)">−5</button><button type="button" onclick="adjustYard('end',-1)">−1</button><button type="button" onclick="adjustYard('end',1)">+1</button><button type="button" onclick="adjustYard('end',5)">+5</button>`
+       : `<button type="button" onclick="adjustYard('end',5)">+5</button><button type="button" onclick="adjustYard('end',1)">+1</button><button type="button" onclick="adjustYard('end',-1)">−1</button><button type="button" onclick="adjustYard('end',-5)">−5</button>`}</div>
    </div>
  </div>
  </div>`;
