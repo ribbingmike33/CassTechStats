@@ -63,8 +63,8 @@ select:focus,input:focus{border-color:var(--navy)}
 .field-wrap{background:#006B4F;border-radius:14px;padding:16px;box-shadow:inset 0 0 0 2px #ffffff18}
 .field{position:relative;width:100%;height:min(250px,30vw);min-height:190px;border:2px solid #fff;border-radius:8px;overflow:hidden;background:repeating-linear-gradient(to right,#087A59 0,#087A59 9.09%,#006B4F 9.09%,#006B4F 18.18%)}
 .field:before{content:"";position:absolute;inset:0;background:repeating-linear-gradient(to right,transparent 0,transparent calc(9.09% - 1px),#ffffffb5 calc(9.09% - 1px),#ffffffb5 9.09%)}
-.endzone{position:absolute;top:0;bottom:0;width:10%;background:#004F3A;border-bottom:1px solid #fff;border-top:1px solid #fff;display:grid;place-items:center;color:#fff;font-size:8px;font-weight:950;letter-spacing:.6px;text-align:center;line-height:1.05;padding:2px;z-index:2;overflow:hidden}
-.ez-left{left:0}.ez-right{right:0}.endzone span{max-width:100%;overflow:hidden;display:block;writing-mode:vertical-rl;transform:rotate(180deg);font-size:7px;letter-spacing:.4px}
+.endzone{position:absolute;top:0;bottom:0;width:10%;background:#004F3A;border:0;display:flex;align-items:center;justify-content:center;color:#fff;font-size:8px;font-weight:950;letter-spacing:.6px;text-align:center;line-height:1.05;padding:0;z-index:4;overflow:visible;box-sizing:border-box}.endzone:after{content:"";position:absolute;inset:0;border:2px solid #fff;pointer-events:none}.ez-left:after{border-right:0}.ez-right:after{border-left:0}
+.ez-left{left:0}.ez-right{right:0}.endzone span{max-width:none;overflow:visible;display:block;writing-mode:horizontal-tb;transform:rotate(90deg);font-size:7px;letter-spacing:.4px;white-space:nowrap;line-height:1}
 .yl{position:absolute;top:50%;transform:translate(-50%,-50%);color:#fff;font-size:10px;font-weight:900;z-index:3;text-shadow:0 1px 2px #000}
 .ball{position:absolute;width:30px;height:30px;border-radius:50%;background:#006B4F;border:3px solid #fff;box-shadow:0 3px 8px #0008;z-index:10;transform:translate(-50%,-50%);touch-action:none;display:grid;place-items:center;color:#fff;font-size:12px;font-weight:900}
 .ball:after{content:"";width:8px;height:3px;background:#fff;border-radius:2px;transform:rotate(90deg)}
@@ -139,7 +139,7 @@ select:focus,input:focus{border-color:var(--navy)}
 .picker-section.collapsed .picker-chevron{transform:rotate(-90deg)}
 .picker-body{padding:8px;max-height:310px;overflow:auto}
 .picker-section.collapsed .picker-body{display:none}
-.endzone{font-size:10px;letter-spacing:1px;white-space:nowrap;overflow:hidden;padding:0 3px}
+.endzone{font-size:10px;letter-spacing:1px;white-space:nowrap;overflow:visible;padding:0}
 @media(max-width:800px){.quarter-btn{padding:10px 2px;font-size:12px}.yard-ticks{font-size:9px}.endzone{font-size:8px;letter-spacing:.5px}}
 .edit-readonly-yard{width:100%;border:1px solid #d5e8e1;border-radius:9px;background:#f1f8f5;padding:11px 12px;color:var(--navy);font-size:18px;font-weight:900}.edit-readonly-yard small{display:block;color:var(--muted);font-size:10px;font-weight:700;margin-top:2px}
 
@@ -155,12 +155,12 @@ select:focus,input:focus{border-color:var(--navy)}
 
 /* Mobile game-log refinements */
 .start-readonly{padding:8px 10px}.start-position-note{font-size:9px;color:#477264;font-weight:700;margin-top:2px}
-.endzone{font-size:7px;letter-spacing:.2px;padding:1px;word-break:normal}.endzone span{font-size:inherit;display:block;transform:rotate(90deg);white-space:nowrap;max-width:none}
+.endzone{font-size:7px;letter-spacing:.2px;padding:0;word-break:normal;overflow:visible}.endzone span{font-size:inherit;display:block;transform:rotate(90deg);white-space:nowrap;max-width:none;overflow:visible;writing-mode:horizontal-tb;line-height:1}
 @media(max-width:800px){
  .player-chips{grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
  .player-chip{min-height:58px;padding:8px 6px;display:flex;flex-direction:column;justify-content:center;align-items:flex-start}
  .player-chip strong{font-size:15px;line-height:1.05}.player-chip span{font-size:11px;line-height:1.1;margin-top:3px}
- .endzone{font-size:6px;line-height:1;letter-spacing:0;padding:0 1px}.endzone span{transform:rotate(90deg);font-size:6px}
+ .endzone{font-size:6px;line-height:1;letter-spacing:0;padding:0;overflow:visible}.endzone span{transform:rotate(90deg);font-size:6px;white-space:nowrap;overflow:visible}
 }
 
 /* Final mobile field + edit fixes */
