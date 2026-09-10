@@ -676,9 +676,7 @@ function controls(){
     : `${rosterPicker("passer","Passer")}<div style="margin-top:12px">${rosterPicker("receiver","Receiver")}</div><div style="margin-top:12px"><label>Pass Result</label><select id="passResult"><option>Complete</option><option>Incomplete</option><option>Interception</option></select></div>`;
  }
  if(type==="special"){
-   dc.innerHTML=opp
-    ? `<label>${currentOpponentName()} Special Teams</label><div style="margin-top:12px"><label>Special Teams Play</label><select id="specialType"><option>Punt</option><option>Kickoff</option><option>Field Goal</option><option>Extra Point</option><option>Punt Return</option><option>Kick Return</option><option>Blocked Kick</option></select></div><div id="specialResultWrap" style="margin-top:12px"></div>`
-    : `<label>Special Teams Play</label><select id="specialType"><option>Punt</option><option>Kickoff</option><option>Field Goal</option><option>Extra Point</option><option>Punt Return</option><option>Kick Return</option><option>Blocked Kick</option></select><div id="specialResultWrap" style="margin-top:12px"></div><div style="margin-top:12px">${rosterPicker("specialPlayer","Player")}</div>`;
+   dc.innerHTML=`<label>${opp?currentOpponentName()+" Special Teams":"Special Teams Play"}</label><select id="specialType"><option>Punt</option><option>Kickoff</option><option>Field Goal</option><option>Extra Point</option><option>Punt Return</option><option>Kick Return</option><option>Blocked Kick</option></select><div id="specialResultWrap" style="margin-top:12px"></div>`;
    const specialTypeEl=document.getElementById("specialType");
    const renderSpecialResult=()=>{
      const wrap=document.getElementById("specialResultWrap"); if(!wrap)return;
@@ -686,11 +684,15 @@ function controls(){
      updatePreview();
    };
    specialTypeEl?.addEventListener("change",renderSpecialResult);
+   if(openingKickoff && specialTypeEl){
+     specialTypeEl.value="Kickoff";
+   }
    renderSpecialResult();
  }
  if(type==="penalty"){
-   dc.innerHTML=`<div class="picker-section" data-picker-role="penPlayer"><button type="button" class="picker-header" onclick="togglePicker('penPlayer')"><span>Player / Team</span><span class="picker-chevron">⌄</span></button><div class="picker-body role-picker" data-role="penPlayer" data-multi="false"><button type="button" class="player-chip selected single-chip" data-player="-1" data-role="penPlayer"><strong>TEAM</strong><span>Team</span></button>${players.map((p,i)=>`<button type="button" class="player-chip single-chip" data-player="${i}" data-role="penPlayer"><strong>${p.n}</strong><span>${p.name}</span></button>`).join("")}</div></div><div style="margin-top:12px"><label>Penalty Yards</label><div class="type-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:8px"><button type="button" class="type-btn pen-preset" data-yards="5">5</button><button type="button" class="type-btn pen-preset active" data-yards="10">10</button><button type="button" class="type-btn pen-preset" data-yards="15">15</button></div><input id="penYards" type="number" value="10" min="0" max="100" step="1" placeholder="Custom yards"></div><div style="margin-top:12px"><label>Penalty</label><select id="penType"><option>Holding</option><option>False Start</option><option>Offside</option><option>Pass Interference</option><option>Personal Foul</option><option>Unsportsmanlike Conduct</option><option>Delay of Game</option><option>Other</option></select>`;
-   document.querySelectorAll('.pen-preset').forEach(b=>b.onclick=()=>{document.querySelectorAll('.pen-preset').forEach(x=>x.classList.remove('active'));b.classList.add('active');document.getElementById('penYards').value=b.dataset.yards;updatePreview();});
+   dc.innerHTML=`<div class="picker-section" data-picker-role="penPlayer"><button type="button" class="picker-header" onclick="togglePicker('penPlayer')"><span>Player / Team</span><span class="picker-chevron">⌄</span></button><div class="picker-body role-picker" data-role="penPlayer" data-multi="false"><button type="button" class="player-chip selected single-chip" data-player="-1" data-role="penPlayer"><strong>TEAM</strong><span>Team</span></button>${players.map((p,i)=>`<button type="button" class="player-chip single-chip" data-player="${i}" data-role="penPlayer"><strong>${p.n}</strong><span>${lastName(p.name)}</span></button>`).join("")}</div></div><div style="margin-top:12px"><label>Penalty Yards</label><div class="type-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:8px"><button type="button" class="type-btn pen-preset" data-yards="5">5</button><button type="button" class="type-btn pen-preset active" data-yards="10">10</button><button type="button" class="type-btn pen-preset" data-yards="15">15</button><button type="button" class="type-btn pen-custom">Custom</button></div><input id="penYards" type="number" value="10" min="0" max="100" step="1" placeholder="Yardage" style="display:none"></div><div style="margin-top:12px"><label>Penalty</label><select id="penType"><option>Holding</option><option>False Start</option><option>Offside</option><option>Pass Interference</option><option>Personal Foul</option><option>Unsportsmanlike Conduct</option><option>Delay of Game</option><option>Other</option></select>`;
+   document.querySelectorAll('.pen-preset').forEach(b=>b.onclick=()=>{document.querySelectorAll('.pen-preset,.pen-custom').forEach(x=>x.classList.remove('active'));b.classList.add('active');const inp=document.getElementById('penYards');if(inp){inp.value=b.dataset.yards;inp.style.display='none';}updatePreview();});
+   document.querySelectorAll('.pen-custom').forEach(b=>b.onclick=()=>{document.querySelectorAll('.pen-preset,.pen-custom').forEach(x=>x.classList.remove('active'));b.classList.add('active');const inp=document.getElementById('penYards');if(inp){inp.style.display='block';inp.focus();inp.select();}updatePreview();});
  }
  if(!opp && (type==="run" || type==="pass")) renderPlayerChips();
  if(opp && (type==="run" || type==="pass")) renderPlayerChips();
@@ -736,10 +738,10 @@ function updatePreview(){
    }
  }
  if(type==="special"){
-   let sp=chosenPlayer("specialPlayer"),spType=selected("specialType")||"Select play";
+   let spType=selected("specialType")||"Select play";
    const y=playGain(opp?"opponent":"cass",startY,endY,fieldFlipped);
    const result=spType==="Field Goal" ? ` · ${selected("specialResult")||"Good"}` : "";
-   p.innerHTML=`<strong>${opp?currentOpponentName():"Cass Tech"} Special Teams</strong><br>${spType}${result} · ${opp?`${y>=0?"+":""}${y} yards`:sp?`${sp.n} ${sp.name}`:"Select player"}`;
+   p.innerHTML=`<strong>${opp?currentOpponentName():"Cass Tech"} Special Teams</strong><br>${spType}${result}${opp?` · ${y>=0?"+":""}${y} yards`:""}`;
  }
  if(type==="penalty"){let pp=chosenPlayer("penPlayer");p.innerHTML=`<strong>${opp?currentOpponentName():"Cass Tech"} Penalty</strong><br>${selected("penType")||"Select penalty"} · ${pp?`${pp.n} ${pp.name}`:"Team"} · ${document.getElementById("penYards")?.value||0} yards`; }
 }
@@ -800,7 +802,7 @@ function logPlay(){
    if(type==="special"){
      p.special=selected("specialType");
      p.result=p.special==="Field Goal" ? (selected("specialResult")||"Good") : "";
-     let x=chosenPlayer("specialPlayer");p.player=x?`${x.n}|${x.name}`:"";
+     p.player="";
      if(p.special==="Field Goal" || p.special==="Extra Point") gain=0;
      else gain=playGain("cass",startY,endY,fieldFlipped);
      if(["Punt Return","Kick Return"].includes(p.special)) p.touchdown=endY===(fieldFlipped?0:100);
@@ -910,9 +912,9 @@ function renderPlayLog(){
  }).join("")}</div>`;
 }
 function editPlayerOptions(selectedValue, role){
- const roster=eligiblePlayers(role); return `<option value="">Select player</option>`+roster.map(x=>{const v=`${x.n}|${x.name}`;return `<option value="${v}" ${v===selectedValue?'selected':''}>${x.n} ${x.name}</option>`}).join('');
+ const roster=eligiblePlayers(role); return `<option value="">Select player</option>`+roster.map(x=>{const v=`${x.n}|${x.name}`;return `<option value="${v}" ${v===selectedValue?'selected':''}>${x.n} ${lastName(x.name)}</option>`}).join('');
 }
-function allPlayerOptions(selectedValue){return `<option value="TEAM|Team" ${selectedValue==="TEAM|Team"?'selected':''}>Team</option>`+players.map(x=>{const v=`${x.n}|${x.name}`;return `<option value="${v}" ${v===selectedValue?'selected':''}>${x.n} ${x.name}</option>`}).join('');}
+function allPlayerOptions(selectedValue){return `<option value="TEAM|Team" ${selectedValue==="TEAM|Team"?'selected':''}>Team</option>`+players.map(x=>{const v=`${x.n}|${x.name}`;return `<option value="${v}" ${v===selectedValue?'selected':''}>${x.n} ${lastName(x.name)}</option>`}).join('');}
 function editPlay(id){
  const p=plays.find(x=>x.id===id); if(!p)return;
  const runner=p.runner||"", passer=p.passer||"", receiver=p.receiver||"";
@@ -931,7 +933,7 @@ function editPlay(id){
   let html='';
   if(side==='cass'&&typ==='run') html=`<label>Runner</label><select id="editRunner">${editPlayerOptions(runner,'runner')}</select>`;
   if(side==='cass'&&typ==='pass') html=`<div class="edit-grid"><div><label>Passer</label><select id="editPasser">${editPlayerOptions(passer,'passer')}</select></div><div><label>Receiver</label><select id="editReceiver">${editPlayerOptions(receiver,'receiver')}</select></div><div><label>Pass Result</label><select id="editResult"><option ${p.result==='Complete'?'selected':''}>Complete</option><option ${p.result==='Incomplete'?'selected':''}>Incomplete</option><option ${p.result==='Interception'?'selected':''}>Interception</option></select></div></div>`;
-  if(typ==='special') html=`<div class="edit-grid"><div><label>Player</label><select id="editSpecialPlayer">${allPlayerOptions(p.player||'')}</select></div><div><label>Special Teams Play</label><select id="editSpecialType"><option>Punt</option><option>Kickoff</option><option>Field Goal</option><option>Extra Point</option><option>Punt Return</option><option>Kick Return</option><option>Blocked Kick</option></select></div><div id="editSpecialResultWrap"></div></div>`;
+  if(typ==='special') html=`<div class="edit-grid"><div><label>Special Teams Play</label><select id="editSpecialType"><option>Punt</option><option>Kickoff</option><option>Field Goal</option><option>Extra Point</option><option>Punt Return</option><option>Kick Return</option><option>Blocked Kick</option></select></div><div id="editSpecialResultWrap"></div></div>`;
   if(typ==='penalty') html=`<div class="edit-grid"><div><label>Player / Team</label><select id="editPenPlayer">${allPlayerOptions(p.player||p.penPlayer||'TEAM|Team')}</select></div><div><label>Penalty</label><select id="editPenType"><option>Holding</option><option>False Start</option><option>Offside</option><option>Pass Interference</option><option>Personal Foul</option><option>Unsportsmanlike Conduct</option><option>Delay of Game</option><option>Other</option></select></div><div><label>Penalty Yards</label><input id="editPenYards" type="number" min="0" max="100" step="1" value="${p.penYards??10}"></div></div>`;
   if(side==='opponent'&&(typ==='run'||typ==='pass'||typ==='special')) html+=`<div class="edit-grid" style="margin-top:12px"><div><label>Tacklers (select all)</label><div class="player-chips">${players.map((x,i)=>{const v=`${x.n}|${x.name}`,sel=(p.tacklers||[]).includes(v);return `<button type="button" class="player-chip edit-tack ${sel?'selected':''}" data-value="${v}"><strong>${x.n}</strong><span>${lastName(x.name)}</span></button>`}).join('')}</div></div><div class="full"><label>Defensive Results</label><div class="edit-checks">${[['sack','Sack'],['int','Interception'],['pbu','Pass Breakup'],['ff','Fumble Caused'],['fr','Fumble Recovered']].map(([v,l])=>`<label><input type="checkbox" class="edit-def" value="${v}" ${(p.defense||[]).includes(v)?'checked':''}>${l}</label>`).join('')}</div></div></div>`;
   document.getElementById('editPlayerFields').innerHTML=html;
