@@ -375,6 +375,31 @@ else {
   games=games.map(g=>byId[g.id]?{...byId[g],...g}:g);
   currentMaxPrepsSchedule.forEach(g=>{if(!games.some(x=>x.id===g.id))games.push({...g});});
 }
+// One-time schedule cleanup: the first two games were imported with scores from the
+// source schedule. They should start blank so the in-app game tracker is the source
+// of truth for the final score. This does not delete any logged play data.
+if(!localStorage.getItem("ct_schedule_scores_reset_v1")){
+  games.forEach(g=>{
+    if(g.id==="g1" || g.id==="g2"){
+      g.cass=null;
+      g.oppScore=null;
+      g.final=false;
+      delete g.finalAt;
+    }
+  });
+  localStorage.setItem("ct_schedule_scores_reset_v1","1");
+  localStorage.setItem("ct_games",JSON.stringify(games));
+}
+// Restore the actual completed results for the first two games.
+// This is a one-time schedule correction and does not alter logged play data.
+if(localStorage.getItem("ct_schedule_actual_scores_v1")!=="1"){
+  const g1=games.find(g=>g.id==="g1");
+  const g2=games.find(g=>g.id==="g2");
+  if(g1){g1.cass=62;g1.oppScore=0;g1.final=true;}
+  if(g2){g2.cass=48;g2.oppScore=21;g2.final=true;}
+  localStorage.setItem("ct_schedule_actual_scores_v1","1");
+  localStorage.setItem("ct_games",JSON.stringify(games));
+}
 let plays=JSON.parse(localStorage.getItem("ct_plays")||"[]");
 let type="run", startY=15, endY=15, fieldFlipped=false, quarter="1";
 const save=()=>{localStorage.setItem("ct_games",JSON.stringify(games));localStorage.setItem("ct_plays",JSON.stringify(plays));};
@@ -430,7 +455,19 @@ function updatePossessionOptions(){
  sel.value=current;
 }
 function renderGameSelect(){
- document.getElementById("gameSelect").innerHTML=games.map(g=>`<option value="${g.id}">${fmtDate(g.date)} — ${g.opp}</option>`).join(""); updatePossessionOptions();
+ const select=document.getElementById("gameSelect");
+ if(!select)return;
+ const current=select.value;
+ // Keep live/upcoming games first. Once a game is marked Final, move it
+ // to the bottom of the Current Game selector without changing schedule order.
+ const ordered=[...games].sort((a,b)=>{
+   const af=!!a.final, bf=!!b.final;
+   if(af!==bf)return af?1:-1;
+   return 0;
+ });
+ select.innerHTML=ordered.map(g=>`<option value="${g.id}">${fmtDate(g.date)} — ${g.opp}${g.final?' — FINAL':''}</option>`).join("");
+ if(ordered.some(g=>g.id===current))select.value=current;
+ updatePossessionOptions();
 }
 function renderField(){
  const field=document.getElementById("fieldUI");
