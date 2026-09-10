@@ -642,8 +642,8 @@ function enforceOpeningKickoff(){
  const hasPlay=plays.some(p=>p.game===gid);
  if(game && !game.final && !hasPlay){
    type="special";
-   startY=40;
-   endY=40;
+   startY=35;
+   endY=35;
    document.querySelectorAll(".type-btn").forEach(b=>b.classList.toggle("active",b.dataset.type==="special"));
    return true;
  }
@@ -766,8 +766,8 @@ function logPlay(){
  if(openingPlay && !(type==="special" && selected("specialType")==="Kickoff")){
    alert("The first play of the game must be a kickoff.");
    type="special";
-   startY=40;
-   endY=40;
+   startY=35;
+   endY=35;
    document.querySelectorAll(".type-btn").forEach(b=>b.classList.toggle("active",b.dataset.type==="special"));
    controls();
    renderField();
@@ -828,7 +828,7 @@ function logPlay(){
  if(scoringPlay){
    p.nextDown=1;p.nextDistance=10;p.nextStart=startY;p.nextPossession=possession;
    plays.unshift(p);save();
-   type="special";startY=40;endY=40;
+   type="special";startY=35;endY=35;
    const possessionEl=document.getElementById("possession"); if(possessionEl)possessionEl.value=possession;
    controls();renderField();
    const st=document.getElementById("specialType"); if(st){st.value="Kickoff";st.dispatchEvent(new Event("change"));}
@@ -1056,8 +1056,8 @@ function resetGame(){
  type="special";
  quarter="1";
  fieldFlipped=false;
- startY=40;
- endY=40;
+ startY=35;
+ endY=35;
  const possessionEl=document.getElementById("possession");
  if(possessionEl) possessionEl.value="cass";
  document.querySelectorAll(".type-btn").forEach(b=>b.classList.toggle("active",b.dataset.type==="special"));
@@ -1121,8 +1121,8 @@ function syncStartFromGame(){
     startY=Number.isFinite(Number(latest.nextStart)) ? Number(latest.nextStart) : 15;
     endY=startY;
   } else {
-    startY=40;
-    endY=40;
+    startY=35;
+    endY=35;
     fieldFlipped=false;
     type="special";
     document.querySelectorAll(".type-btn").forEach(b=>b.classList.toggle("active",b.dataset.type==="special"));
