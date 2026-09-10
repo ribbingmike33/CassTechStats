@@ -51,7 +51,7 @@ select:focus,input:focus{border-color:var(--navy)}
 .game-setup-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
 .game-setup-toggle{border:1px solid var(--line);background:#EAF4F0;color:var(--navy);border-radius:9px;padding:8px 12px;font-weight:850}
 .game-setup.collapsed .game-setup-body{display:none}
-.current-scoreboard{background:var(--navy);color:#fff;border-radius:14px;padding:14px 18px;margin-bottom:12px;overflow:hidden}
+.current-scoreboard{background:var(--navy);color:#fff;border-radius:14px;padding:14px 18px;margin-bottom:12px;overflow:hidden}.game-status-row{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:12px}.game-status{font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.7px;opacity:.85}.end-game-btn{background:#fff;color:#8A241A;border:0;border-radius:9px;padding:10px 14px;font-weight:900}.end-game-btn:disabled{opacity:.6;cursor:default}.game-ended-banner{margin:0 0 16px;padding:12px 14px;border:1px solid #BFD8CE;border-radius:10px;background:#EAF4F0;color:#17352A;font-weight:850}
 .scoreboard-top{display:flex;justify-content:space-between;gap:20px;align-items:center}
 .score-team{font-size:12px;font-weight:850;text-transform:uppercase;letter-spacing:.6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:45vw}
 .score-num{font-size:38px;font-weight:950;line-height:1.05}
@@ -308,7 +308,7 @@ select:focus,input:focus{border-color:var(--navy)}
     </div>
     <div class="card pad field-card">
       <div id="fieldUI"></div>
-      <button class="btn primary field-log-btn" onclick="logPlay()">Log Play</button>
+      <button type="button" class="btn primary field-log-btn" id="logPlayBtn" onclick="logPlay()">Log Play</button>
     </div>
   </div>
   <div class="card pad" style="margin-top:16px">
@@ -402,7 +402,7 @@ function renderSchedule(){
  let wins=games.filter(g=>g.cass>g.oppScore).length,loss=games.filter(g=>g.cass<g.oppScore).length;
  document.getElementById("record").textContent=`${wins}–${loss}`;
  document.getElementById("recordDetail").textContent=games.length?`${games.length} games scheduled`:"No games entered yet";
- document.getElementById("scheduleTable").innerHTML=games.length?`<table class="schedule-table"><thead><tr><th>Date</th><th>Opponent</th><th>Location</th><th>Result</th></tr></thead><tbody>${games.map(g=>`<tr><td class="schedule-date">${fmtDate(g.date)}${g.time?`<div class="muted schedule-time">${g.time}</div>`:""}</td><td><strong>${g.opp}</strong></td><td>${g.loc}</td><td>${Number.isFinite(g.cass)&&Number.isFinite(g.oppScore)?`${g.cass}–${g.oppScore}`:"—"}</td></tr>`).join("")}</tbody></table>`:'<div class="empty">No games scheduled.</div>';
+ document.getElementById("scheduleTable").innerHTML=games.length?`<table class="schedule-table"><thead><tr><th>Date</th><th>Opponent</th><th>Location</th><th>Result</th></tr></thead><tbody>${games.map(g=>{const hasScore=Number.isFinite(g.cass)&&Number.isFinite(g.oppScore);const result=hasScore?`${g.cass}–${g.oppScore}${g.final?` <span class="muted" style="font-size:10px">FINAL</span>`:""}`:"—";return `<tr><td class="schedule-date">${fmtDate(g.date)}${g.time?`<div class="muted schedule-time">${g.time}</div>`:""}</td><td><strong>${g.opp}</strong></td><td>${g.loc}</td><td>${result}</td></tr>`}).join("")}</tbody></table>`:'<div class="empty">No games scheduled.</div>';
 }
 function addGame(){
  let opp=prompt("Opponent name"); if(!opp)return;
@@ -594,6 +594,16 @@ function controls(){
  clearRosterSelections();
  const possession=document.getElementById("possession")?.value||"cass";
  const opp=possession==="opponent";
+ const logBtn=document.getElementById('logPlayBtn');
+ if(currentGameIsEnded()){
+   dc.innerHTML='<div class="game-ended-banner">Game ended. Statistics are locked for this game.</div>';
+   const preview=document.getElementById('preview'); if(preview)preview.innerHTML='';
+   document.querySelectorAll('#cg-logstats .type-btn').forEach(b=>{b.disabled=true;});
+   if(logBtn){logBtn.disabled=true;logBtn.textContent='Game Ended';}
+   return;
+ }
+ document.querySelectorAll('#cg-logstats .type-btn').forEach(b=>{b.disabled=false;});
+ if(logBtn){logBtn.disabled=false;logBtn.textContent='Log Play';}
  if(type==="run"){
    dc.innerHTML=opp
     ? `<label>${currentOpponentName()} Run</label><div style="margin-top:12px"><label>Cass Defensive Players — Tackles</label><div id="tackleChips" class="player-chips"></div></div><div style="margin-top:12px"><label>Defensive Result</label><div class="def-grid"><button class="def-btn" data-def="sack">Sack</button><button class="def-btn" data-def="ff">Fumble Caused</button><button class="def-btn" data-def="fr">Fumble Recovered</button></div></div>`
@@ -674,6 +684,8 @@ function updatePreview(){
 }
 function logPlay(){
  let game=document.getElementById("gameSelect").value,q=quarter;
+ const gameObj=games.find(g=>g.id===game);
+ if(gameObj?.final){ alert("This game has ended. Stats are locked and no more plays can be logged."); return; }
  const possession=document.getElementById("possession").value;
  if(!game)return;
  const dd=currentDownDistance(game), down=dd.down, distance=dd.distance;
@@ -903,11 +915,35 @@ function scoreForGame(gid){
  });
  return {cass,opp,byQ};
 }
+function currentGameIsEnded(){
+ const gid=document.getElementById('gameSelect')?.value;
+ return !!games.find(g=>g.id===gid)?.final;
+}
+function endGame(){
+ const gid=document.getElementById('gameSelect')?.value;
+ const game=games.find(g=>g.id===gid);
+ if(!game)return;
+ if(game.final)return;
+ const sc=scoreForGame(gid);
+ const confirmEnd=window.confirm(`End ${game.opp||'this game'}? Final score: Cass Tech ${sc.cass} — ${game.opp||'Opponent'} ${sc.opp}. Stats will stop updating for this game.`);
+ if(!confirmEnd)return;
+ game.cass=sc.cass;
+ game.oppScore=sc.opp;
+ game.final=true;
+ game.finalAt=new Date().toISOString();
+ save();
+ renderSchedule();
+ renderCurrentGame();
+ controls();
+ renderField();
+ renderPlayLog();
+}
 function renderCurrentScoreboard(){
  const el=document.getElementById('currentScoreboard'); if(!el)return;
  const gid=document.getElementById('gameSelect')?.value; const game=games.find(g=>g.id===gid); if(!game){el.innerHTML='';return;}
  const sc=scoreForGame(gid); const o=game.opp||'Opponent';
- el.innerHTML=`<div class="scoreboard-top"><div><div class="score-team">CASS TECH</div><div class="score-num">${sc.cass}</div></div><div style="text-align:right"><div class="score-team">${o}</div><div class="score-num">${sc.opp}</div></div></div>`;
+ const ended=!!game.final;
+ el.innerHTML=`<div class="scoreboard-top"><div><div class="score-team">CASS TECH</div><div class="score-num">${ended?Number(game.cass)||0:sc.cass}</div></div><div style="text-align:right"><div class="score-team">${o}</div><div class="score-num">${ended?Number(game.oppScore)||0:sc.opp}</div></div></div><div class="game-status-row"><span class="game-status">${ended?'Final':'Live Game'}</span><button type="button" class="end-game-btn" onclick="endGame()" ${ended?'disabled':''}>${ended?'Game Ended':'End Game'}</button></div>`;
 }
 function renderCurrentBoxScore(){
  const el=document.getElementById('currentBoxScore'); if(!el)return;
