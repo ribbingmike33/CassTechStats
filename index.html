@@ -405,35 +405,20 @@ if(localStorage.getItem("ct_schedule_actual_scores_v1")!=="1"){
 }
 let plays=JSON.parse(localStorage.getItem("ct_plays")||"[]");
 let type="run", startY=15, endY=15, fieldFlipped=false, quarter="1";
-let gameState=JSON.parse(localStorage.getItem("ct_game_state_v1")||"{}");
-let savedGameId=localStorage.getItem("ct_selected_game_v1")||"";
-const save=()=>{localStorage.setItem("ct_games",JSON.stringify(games));localStorage.setItem("ct_plays",JSON.stringify(plays));};
-function saveGameState(){
+const LIVE_STATE_KEY="ct_live_state_v2";
+function saveLiveState(){
  const gid=document.getElementById("gameSelect")?.value;
  if(!gid)return;
- const poss=document.getElementById("possession")?.value||"cass";
- gameState[gid]={startY,endY,fieldFlipped,quarter,type,possession:poss,updatedAt:Date.now()};
- localStorage.setItem("ct_game_state_v1",JSON.stringify(gameState));
- localStorage.setItem("ct_selected_game_v1",gid);
+ const state={gameId:gid,type,startY,endY,fieldFlipped,quarter,possesssion:document.getElementById("possession")?.value||"cass"};
+ // Keep the key name simple and tolerate older state written by prior versions.
+ state.possession=state.possesssion; delete state.possesssion;
+ localStorage.setItem(LIVE_STATE_KEY,JSON.stringify(state));
 }
-function restoreGameState(gid){
- if(!gid)return;
- savedGameId=gid;
- localStorage.setItem("ct_selected_game_v1",gid);
- const st=gameState[gid];
- if(st){
-   startY=Math.max(0,Math.min(100,Number(st.startY)||0));
-   endY=Math.max(0,Math.min(100,Number(st.endY)||startY));
-   fieldFlipped=!!st.fieldFlipped;
-   quarter=st.quarter||"1";
-   type=st.type||"run";
-   updatePossessionOptions();
-   const sel=document.getElementById("possession");
-   if(sel && (st.possession==="cass"||st.possession==="opponent")) sel.value=st.possession;
-   return true;
- }
- return false;
+function loadLiveState(){
+ try{return JSON.parse(localStorage.getItem(LIVE_STATE_KEY)||"null")}catch(_){return null}
 }
+function clearLiveState(){localStorage.removeItem(LIVE_STATE_KEY)}
+const save=()=>{localStorage.setItem("ct_games",JSON.stringify(games));localStorage.setItem("ct_plays",JSON.stringify(plays));saveLiveState();};
 // Yardage is always measured from the offense's perspective.
 // When the field is flipped, the offense is moving toward visual left;
 // otherwise it is moving toward visual right. The same formula applies to
@@ -488,7 +473,7 @@ function updatePossessionOptions(){
 function renderGameSelect(){
  const select=document.getElementById("gameSelect");
  if(!select)return;
- const current=select.value || savedGameId;
+ const current=select.value;
  // Keep live/upcoming games first. Once a game is marked Final, move it
  // to the bottom of the Current Game selector without changing schedule order.
  const ordered=[...games].sort((a,b)=>{
@@ -497,10 +482,9 @@ function renderGameSelect(){
    return 0;
  });
  select.innerHTML=ordered.map(g=>`<option value="${g.id}">${fmtDate(g.date)} — ${g.opp}${g.final?' — FINAL':''}</option>`).join("");
- if(ordered.some(g=>g.id===current))select.value=current;
- else if(ordered.length)select.value=ordered[0].id;
- savedGameId=select.value||savedGameId;
- localStorage.setItem("ct_selected_game_v1",savedGameId);
+ const saved=loadLiveState();
+ const preferred=saved?.gameId || current;
+ if(ordered.some(g=>g.id===preferred))select.value=preferred;
  updatePossessionOptions();
 }
 function renderField(){
@@ -529,13 +513,13 @@ function renderField(){
      <div class="yard-control-head"><strong>End Yard Line</strong><span class="yard-value" id="endYardValue">${yardLineLabel(endY)}</span></div>
      <input class="yard-range" id="endYardRange" type="range" min="0" max="100" step="1" value="${endY}" ${fieldFlipped?'dir="rtl"':''} oninput="setYard('end',this.value)">
      <div class="yard-ticks"><span>0</span><span>10</span><span>20</span><span>30</span><span>40</span><span>50</span><span>40</span><span>30</span><span>20</span><span>10</span><span>0</span></div>
-     <div class="yard-buttons"><button type="button" onclick="adjustYard('end',fieldFlipped?5:-5)">−5</button><button type="button" onclick="adjustYard('end',fieldFlipped?1:-1)">−1</button><button type="button" onclick="adjustYard('end',fieldFlipped?-1:1)">+1</button><button type="button" onclick="adjustYard('end',fieldFlipped?-5:5)">+5</button></div>
+     <div class="yard-buttons"><button type="button" onclick="adjustYard('end',-5)">−5</button><button type="button" onclick="adjustYard('end',-1)">−1</button><button type="button" onclick="adjustYard('end',1)">+1</button><button type="button" onclick="adjustYard('end',5)">+5</button></div>
    </div>
  </div>
  </div>`;
  positionBalls(); enableDrag(document.getElementById("endBall"),false);
 }
-function flipField(){ fieldFlipped=!fieldFlipped; saveGameState(); renderField(); }
+function flipField(){ fieldFlipped=!fieldFlipped; renderField(); saveLiveState(); }
 function yardToPct(y){
  const n=Math.max(0,Math.min(100,Number(y)||0));
  const base=10+(n*0.8);
@@ -556,8 +540,8 @@ function setYard(which,value){
   const range=document.getElementById(which+'YardRange');
   const out=document.getElementById(which+'YardValue');
   if(range) range.value=y; if(out) out.textContent=yardLineLabel(y);
-  saveGameState();
   positionBalls();
+  saveLiveState();
 }
 function adjustYard(which,delta){
   const current=which==='start'?startY:endY;
@@ -566,10 +550,6 @@ function adjustYard(which,delta){
 function positionBalls(){
  let a=document.getElementById("startBall"),b=document.getElementById("endBall"); if(!a)return;
  a.style.left=yardToPct(startY)+"%";a.style.top="30%"; b.style.left=yardToPct(endY)+"%";b.style.top="30%";
- const range=document.getElementById("endYardRange");
- const out=document.getElementById("endYardValue");
- if(range) range.value=endY;
- if(out) out.textContent=yardLineLabel(endY);
  updatePreview();
 }
 function enableDrag(el,isStart){
@@ -580,7 +560,8 @@ function enableDrag(el,isStart){
   const r=field.getBoundingClientRect();
   const pct=((e.clientX-r.left)/r.width)*100;
   const yard=pctToY(pct);
-  if(isStart) return; else setYard('end',yard);
+  if(isStart) return; else endY=yard;
+  positionBalls();
  };
  const stop=e=>{
   el.onpointermove=null;
@@ -883,7 +864,6 @@ function logPlay(){
    const possessionEl=document.getElementById("possession"); if(possessionEl)possessionEl.value=possession;
    controls();renderField();
    const st=document.getElementById("specialType"); if(st){st.value="Kickoff";st.dispatchEvent(new Event("change"));}
-   saveGameState();
    renderPlayLog();renderStats();renderCurrentGame();
    setTimeout(()=>document.querySelector("#cg-logstats .controls .type-grid")?.scrollIntoView({behavior:"smooth",block:"start"}),80);
    return;
@@ -918,7 +898,6 @@ function logPlay(){
    p.touchback=isTouchback;
 
    save();
-   saveGameState();
    renderPlayLog();renderStats();renderCurrentGame();controls();renderField();
    setTimeout(()=>document.querySelector("#cg-logstats .controls .type-grid")?.scrollIntoView({behavior:"smooth",block:"start"}),80);
    return;
@@ -946,7 +925,7 @@ function logPlay(){
  } else {
    plays.unshift(p);
  }
- save();syncFieldToLatestPlay(game);saveGameState();renderPlayLog();renderStats();renderCurrentGame();controls();renderField();
+ save();syncFieldToLatestPlay(game);renderPlayLog();renderStats();renderCurrentGame();controls();renderField();
  setTimeout(()=>document.querySelector("#cg-logstats .controls .type-grid")?.scrollIntoView({behavior:"smooth",block:"start"}),80);
 }
 function renderPlayLog(){
@@ -1064,89 +1043,37 @@ function stats(gameFilter){
 function buildTeamStatbook(rows, leftName, rightName, title){
  const esc=x=>String(x??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
  const calc=side=>{
-   const ps=rows.filter(p=>p.side===side);
-   const scrim=ps.filter(p=>p.type==='run'||p.type==='pass');
-   const runs=ps.filter(p=>p.type==='run');
-   const passes=ps.filter(p=>p.type==='pass');
-   const specials=ps.filter(p=>p.type==='special');
-   const pens=rows.filter(p=>p.type==='penalty' && (p.penaltyBy||p.side)===side);
-   const passAtt=passes.filter(p=>p.result!=='Sack').length;
-   const cmp=passes.filter(p=>p.result==='Complete').length;
-   const passY=passes.reduce((sum,p)=>sum+(Number(p.yards)||0),0);
-   const rushY=runs.reduce((sum,p)=>sum+(Number(p.yards)||0),0);
-   const totalY=passY+rushY;
-   const totalPlays=scrim.length;
-   const firstDownPlays=scrim.filter(p=>Number(p.nextDown)===1);
-   const rushingFirstDowns=runs.filter(p=>Number(p.nextDown)===1).length;
-   const passingFirstDowns=passes.filter(p=>Number(p.nextDown)===1 && p.result==='Complete').length;
-   const penaltyFirstDowns=pens.filter(p=>p.penaltyBy!==side).length;
-   const thirdDowns=scrim.filter(p=>Number(p.down)===3);
-   const fourthDowns=scrim.filter(p=>Number(p.down)===4);
-   const thirdConv=thirdDowns.filter(p=>Number(p.nextDown)===1).length;
-   const fourthConv=fourthDowns.filter(p=>Number(p.nextDown)===1).length;
-   const td=ps.filter(p=>p.touchdown).length;
-   const fgs=specials.filter(p=>p.special==='Field Goal' && p.result==='Good').length;
-   const pats=specials.filter(p=>p.special==='Extra Point' && p.result!=='No Good').length;
-   const sacks=rows.filter(p=>p.side!==side && p.type==='pass' && (p.defense||[]).includes('sack')).length;
-   const sackYards=rows.filter(p=>p.side!==side && p.type==='pass' && (p.defense||[]).includes('sack')).reduce((sum,p)=>sum+Math.abs(Math.min(0,Number(p.yards)||0)),0);
-   const intThrown=passes.filter(p=>p.result==='Interception').length;
-   const fumblesLost=ps.filter(p=>(p.defense||[]).includes('fr')).length;
-   const penaltyY=pens.reduce((sum,p)=>sum+(Number(p.penYards)||0),0);
-   return {
-     passAtt,cmp,passY,rushAtt:runs.length,rushY,totalY,totalPlays,
-     firstDowns:firstDownPlays.length+penaltyFirstDowns,
-     rushingFirstDowns,passingFirstDowns,penaltyFirstDowns,
-     thirdAttempts:thirdDowns.length,thirdConv,fourthAttempts:fourthDowns.length,fourthConv,
-     td,fgs,pats,intThrown,sacks,sackYards,fumblesLost,penaltyY,penalties:pens.length
-   };
+  const ps=rows.filter(p=>p.side===side);
+  const scrim=ps.filter(p=>p.type==='run'||p.type==='pass');
+  const runs=ps.filter(p=>p.type==='run');
+  const passes=ps.filter(p=>p.type==='pass');
+  const special=ps.filter(p=>p.type==='special');
+  const pens=ps.filter(p=>p.type==='penalty' && (p.penaltyBy||p.side)===side);
+  const passAtt=passes.length, cmp=passes.filter(p=>p.result==='Complete').length;
+  const passY=passes.reduce((a,p)=>a+(Number(p.yards)||0),0);
+  const rushY=runs.reduce((a,p)=>a+(Number(p.yards)||0),0);
+  const totalY=passY+rushY, totalPlays=scrim.length;
+  const firstDowns=scrim.filter(p=>Number(p.nextDown)===1).length + pens.filter(p=>p.penaltyBy!==side).length;
+  const third= scrim.filter(p=>Number(p.nextDown)===1 && Number(p.down)===3);
+  const fourth= scrim.filter(p=>Number(p.nextDown)===1 && Number(p.down)===4);
+  const td=ps.filter(p=>p.touchdown).length;
+  const fgs=ps.filter(p=>p.type==='special'&&p.special==='Field Goal'&&p.result==='Good').length;
+  const turnovers=passes.filter(p=>p.result==='Interception').length + ps.filter(p=>p.side===side && (p.defense||[]).includes('fr')).length;
+  const penaltyY=pens.reduce((a,p)=>a+(Number(p.penYards)||0),0);
+  return {passAtt,cmp,passY,rushAtt:runs.length,rushY,totalY,totalPlays,firstDowns,third,fourth,td,fgs,turnovers,penaltyY,penalties:pens.length,special};
  };
  const L=calc('cass'), R=calc('opponent');
- const eff=(made,att)=>att?`${made}-${att}`:'0-0';
+ const fmtEff=(x)=>x.length?`${x.filter(p=>Number(p.nextDown)===1).length}-${x.length}`:'0-0';
+ const val=(a,b,decimals=false)=>`${decimals?(a.totalPlays?(a.totalY/a.totalPlays).toFixed(1):'0.0'):a}||${decimals?(b.totalPlays?(b.totalY/b.totalPlays).toFixed(1):'0.0'):b}`;
  const row=(label,a,b,cls='')=>`<div class="team-stat-row ${cls}"><div class="team-stat-label">${label}</div><div>${a}</div><div>${b}</div></div>`;
  const section=(label,content)=>`<div class="team-stat-section"><div class="team-stat-section-title">${label}</div>${content}</div>`;
- const drives=side=>{
-   let n=0,had=false;
-   rows.slice().sort((a,b)=>(Number(b.id?.slice(1))||0)-(Number(a.id?.slice(1))||0)).forEach(()=>{});
-   const chronological=rows.slice().reverse();
-   chronological.forEach(p=>{
-     if(p.side===side && !had && (p.type==='run'||p.type==='pass'||p.type==='special')){ n++; had=true; }
-     const possessionChanged=p.nextPossession && p.nextPossession!==side;
-     if(possessionChanged) had=false;
-   });
-   return n;
- };
- const LD=drives('cass'), RD=drives('opponent');
- return `<div class="team-statbook">
-   <div class="team-statbook-title">${esc(title||'Team Stats')}</div>
-   <div class="team-stat-head"><div> </div><strong>${esc(leftName)}</strong><strong>${esc(rightName)}</strong></div>
-   ${section('First Downs',
-     row('Total 1st Downs',L.firstDowns,R.firstDowns)+
-     row('Rushing 1st Downs',L.rushingFirstDowns,R.rushingFirstDowns)+
-     row('Passing 1st Downs',L.passingFirstDowns,R.passingFirstDowns)+
-     row('1st Downs from Penalties',L.penaltyFirstDowns,R.penaltyFirstDowns)+
-     row('3rd Down Efficiency',eff(L.thirdConv,L.thirdAttempts),eff(R.thirdConv,R.thirdAttempts))+
-     row('4th Down Efficiency',eff(L.fourthConv,L.fourthAttempts),eff(R.fourthConv,R.fourthAttempts))
-   )}
-   ${section('Total Offense',
-     row('Total Plays',L.totalPlays,R.totalPlays)+
-     row('Total Yards',L.totalY,R.totalY)+
-     row('Total Drives',LD,RD)+
-     row('Yards per Play',L.totalPlays?(L.totalY/L.totalPlays).toFixed(1):'0.0',R.totalPlays?(R.totalY/R.totalPlays).toFixed(1):'0.0')
-   )}
-   ${section('Passing',
-     row('Passing Yards',L.passY,R.passY)+
-     row('Comp / Att',`${L.cmp}/${L.passAtt}`,`${R.cmp}/${R.passAtt}`)+
-     row('Yards per Pass',L.passAtt?(L.passY/L.passAtt).toFixed(1):'0.0',R.passAtt?(R.passY/R.passAtt).toFixed(1):'0.0')+
-     row('Interceptions Thrown',L.intThrown,R.intThrown)+
-     row('Sacks - Yards Lost',`${L.sacks}-${L.sackYards}`,`${R.sacks}-${R.sackYards}`)
-   )}
-   ${section('Rushing',
-     row('Rushing Yards',L.rushY,R.rushY)+
-     row('Rushing Attempts',L.rushAtt,R.rushAtt)+
-     row('Yards per Rush',L.rushAtt?(L.rushY/L.rushAtt).toFixed(1):'0.0',R.rushAtt?(R.rushY/R.rushAtt).toFixed(1):'0.0')
-   )}
-   ${section('Penalties',row('Penalties',L.penalties,R.penalties)+row('Penalty Yards',L.penaltyY,R.penaltyY))}
-   ${section('Scoring',row('Touchdowns',L.td,R.td)+row('Field Goals',L.fgs,R.fgs)+row('Extra Points',L.pats,R.pats))}
+ return `<div class="team-statbook"><div class="team-statbook-title">${esc(title||'Team Stats')}</div><div class="team-stat-head"><div></div><strong>${esc(leftName)}</strong><strong>${esc(rightName)}</strong></div>
+ ${section('First Downs',row('Total 1st Downs',L.firstDowns,R.firstDowns)+row('Rushing 1st Downs',L.runs.filter(p=>Number(p.nextDown)===1).length,R.runs.filter(p=>Number(p.nextDown)===1).length)+row('Passing 1st Downs',L.passes.filter(p=>Number(p.nextDown)===1).length,R.passes.filter(p=>Number(p.nextDown)===1).length)+row('3rd Down Efficiency',fmtEff(L.third),fmtEff(R.third))+row('4th Down Efficiency',fmtEff(L.fourth),fmtEff(R.fourth)))}
+ ${section('Total Offense',row('Total Plays',L.totalPlays,R.totalPlays)+row('Total Yards',L.totalY,R.totalY)+row('Yards per Play',L.totalPlays?(L.totalY/L.totalPlays).toFixed(1):'0.0',R.totalPlays?(R.totalY/R.totalPlays).toFixed(1):'0.0')+row('Touchdowns',L.td,R.td))}
+ ${section('Passing',row('Passing Yards',L.passY,R.passY)+row('Comp / Att',`${L.cmp} / ${L.passAtt}`,`${R.cmp} / ${R.passAtt}`)+row('Yards per Pass',L.passAtt?(L.passY/L.passAtt).toFixed(1):'0.0',R.passAtt?(R.passY/R.passAtt).toFixed(1):'0.0')+row('Interceptions Thrown',L.turnovers,R.turnovers))}
+ ${section('Rushing',row('Rushing Yards',L.rushY,R.rushY)+row('Rushing Attempts',L.rushAtt,R.rushAtt)+row('Yards per Rush',L.rushAtt?(L.rushY/L.rushAtt).toFixed(1):'0.0',R.rushAtt?(R.rushY/R.rushAtt).toFixed(1):'0.0'))}
+ ${section('Penalties',row('Penalties',L.penalties,R.penalties)+row('Penalty Yards',L.penaltyY,R.penaltyY))}
+ ${section('Scoring',row('Touchdowns',L.td,R.td)+row('Field Goals',L.fgs,R.fgs))}
  </div>`;
 }
 function renderStats(){
@@ -1190,13 +1117,12 @@ function resetGame(){
    : `Reset ${game.opp||'this game'}? This will clear its score and final status.`;
  if(!window.confirm(msg))return;
  plays=plays.filter(p=>p.game!==gid);
- delete gameState[gid];
- localStorage.setItem("ct_game_state_v1",JSON.stringify(gameState));
  game.cass=null;
  game.oppScore=null;
  game.final=false;
  delete game.finalAt;
  delete game.finalScore;
+ clearLiveState();
  type="special";
  quarter="1";
  fieldFlipped=false;
@@ -1223,6 +1149,7 @@ function endGame(){
  game.final=true;
  game.finalAt=new Date().toISOString();
  save();
+ clearLiveState();
  renderSchedule();
  renderCurrentGame();
  controls();
@@ -1259,43 +1186,69 @@ function setCurrentGameTab(tab){
 }
 function syncStartFromGame(){
   const gid=document.getElementById('gameSelect')?.value;
-  if(!gid)return;
-  const restored=restoreGameState(gid);
-  if(!restored){
-    const latest=plays.find(p=>p.game===gid);
-    if(latest){
-      startY=Number.isFinite(Number(latest.nextStart)) ? Number(latest.nextStart) : 35;
-      endY=startY;
-      // Existing plays created before persistent field state: reconstruct the
-      // field direction by replaying possession-changing plays from kickoff.
-      let flipped=false;
-      plays.filter(p=>p.game===gid).slice().reverse().forEach(p=>{
-        if(p.nextPossession && p.nextPossession!==p.side) flipped=!flipped;
-      });
-      fieldFlipped=flipped;
-      type=latest.nextType||type||"run";
-      if(latest.nextQuarter) quarter=latest.nextQuarter;
-      if(latest.nextPossession){
-        updatePossessionOptions();
-        const sel=document.getElementById('possession'); if(sel)sel.value=latest.nextPossession;
-      }
-    } else {
-      startY=35;
-      endY=35;
-      fieldFlipped=false;
-      type="special";
-      quarter="1";
-      updatePossessionOptions();
-      const sel=document.getElementById('possession'); if(sel)sel.value="cass";
+  const latest=plays.find(p=>p.game===gid);
+  const game=games.find(g=>g.id===gid);
+  if(latest){
+    startY=Number.isFinite(Number(latest.nextStart)) ? Number(latest.nextStart) : 35;
+    endY=startY;
+    fieldFlipped=!!latest.nextFieldFlipped;
+    if(latest.nextPossession){
+      const sel=document.getElementById('possession');
+      if(sel)sel.value=latest.nextPossession;
+      lastPossession=latest.nextPossession;
     }
+  } else {
+    startY=35;
+    endY=35;
+    fieldFlipped=false;
+    type="special";
+    document.querySelectorAll(".type-btn").forEach(b=>b.classList.toggle("active",b.dataset.type==="special"));
+    const sel=document.getElementById('possession');
+    if(sel)sel.value=game?.initialPossession||"cass";
+    lastPossession=sel?.value||"cass";
   }
-  saveGameState();
-  document.querySelectorAll(".type-btn").forEach(b=>b.classList.toggle("active",b.dataset.type===type));
+}
+function restoreLiveState(){
+  const state=loadLiveState();
+  if(!state)return;
+  const game=games.find(g=>g.id===state.gameId);
+  if(!game || game.final){ clearLiveState(); return; }
+  const select=document.getElementById('gameSelect');
+  if(select)select.value=state.gameId;
+  updatePossessionOptions();
+  if(state.possession)document.getElementById('possession').value=state.possession;
+  if(state.type)type=state.type;
+  if(Number.isFinite(Number(state.startY)))startY=Number(state.startY);
+  if(Number.isFinite(Number(state.endY)))endY=Number(state.endY);
+  if(typeof state.fieldFlipped==='boolean')fieldFlipped=state.fieldFlipped;
+  if(state.quarter)quarter=state.quarter;
+  document.querySelectorAll('.type-btn').forEach(b=>b.classList.toggle('active',b.dataset.type===type));
+  lastPossession=document.getElementById('possession')?.value||'cass';
+}
+function hasActiveGame(){
+  const state=loadLiveState();
+  if(state){
+    const g=games.find(x=>x.id===state.gameId);
+    if(g && !g.final)return true;
+  }
+  return games.some(g=>!g.final && plays.some(p=>p.game===g.id));
 }
 function renderQuarterButtons(){
   document.querySelectorAll('.quarter-btn').forEach(b=>b.classList.toggle('active',b.dataset.quarter===quarter));
 }
-function renderAll(){renderSchedule();renderGameSelect();controls();renderField();renderPlayLog();renderStats();renderRoster();renderQuarterButtons();renderCurrentGame();}
+function renderAll(){
+ renderSchedule();
+ renderGameSelect();
+ restoreLiveState();
+ controls();
+ renderField();
+ renderPlayLog();
+ renderStats();
+ renderRoster();
+ renderQuarterButtons();
+ renderCurrentGame();
+ showPage(hasActiveGame()?'log':'schedule');
+}
 
 function renderRoster(){
  const box=document.getElementById('rosterGrid');if(!box)return;
@@ -1311,22 +1264,19 @@ function showPage(id){
   if(id==='log')renderCurrentGame();
 }
 document.querySelectorAll(".navbtn,.bottom-nav button").forEach(b=>b.onclick=()=>showPage(b.dataset.page));
-document.querySelectorAll(".quarter-btn").forEach(b=>b.onclick=()=>{quarter=b.dataset.quarter;saveGameState();renderQuarterButtons();});
-document.querySelectorAll(".type-btn").forEach(b=>b.onclick=()=>{document.querySelectorAll(".type-btn").forEach(x=>x.classList.remove("active"));b.classList.add("active");type=b.dataset.type;saveGameState();controls();renderField();});
+document.querySelectorAll(".quarter-btn").forEach(b=>b.onclick=()=>{quarter=b.dataset.quarter;renderQuarterButtons();saveLiveState();});
+document.querySelectorAll(".type-btn").forEach(b=>b.onclick=()=>{document.querySelectorAll(".type-btn").forEach(x=>x.classList.remove("active"));b.classList.add("active");type=b.dataset.type;controls();renderField();saveLiveState();});
 document.querySelectorAll('.current-tab').forEach(b=>b.onclick=()=>setCurrentGameTab(b.dataset.cgtab));
 document.querySelectorAll(".tab").forEach(b=>b.onclick=()=>{document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active"));b.classList.add("active");document.getElementById("individualStats").style.display=b.dataset.stab==="individual"?"block":"none";document.getElementById("teamStats").style.display=b.dataset.stab==="team"?"block":"none";});
 document.getElementById("gameSelect").onchange=()=>{
-  savedGameId=document.getElementById("gameSelect").value||"";
-  localStorage.setItem("ct_selected_game_v1",savedGameId);
   syncStartFromGame();
   updatePossessionOptions();
   enforceOpeningKickoff();
-  saveGameState();
   renderQuarterButtons();
   controls();
   renderPlayLog();
   renderField();
-  renderCurrentGame();
+  saveLiveState();
 };
 let lastPossession=document.getElementById("possession")?.value||"cass";
 document.getElementById("possession").onchange=()=>{
@@ -1337,8 +1287,7 @@ document.getElementById("possession").onchange=()=>{
     endY=100-endY;
     lastPossession=next;
   }
-  saveGameState();
-  controls();renderField();
+  controls();renderField();saveLiveState();
 };
 document.addEventListener("change",updatePreview);document.addEventListener("input",updatePreview);
 renderAll();
