@@ -89,6 +89,7 @@ select:focus,input:focus{border-color:var(--navy)}
  main{padding:18px 12px 100px}.grid2,.grid3,.play-layout{grid-template-columns:1fr}.statgrid{grid-template-columns:repeat(2,1fr)}
  .play-layout{display:flex;flex-direction:column}.controls{order:1}.field-card{order:2}
 .field-log-btn{width:100%;margin-top:16px;min-height:48px;font-size:16px;font-weight:800}
+.conversion-card{max-width:520px}.conversion-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.conversion-btn{border:1px solid var(--line);background:#fff;color:var(--navy);border-radius:12px;padding:16px 12px;text-align:left;min-height:82px;font-weight:900}.conversion-btn strong,.conversion-btn span{display:block}.conversion-btn span{font-size:12px;margin-top:5px;color:#477264;letter-spacing:.3px}@media(max-width:600px){.conversion-grid{grid-template-columns:1fr}.conversion-btn{min-height:72px}}
 
  .type-grid{grid-template-columns:repeat(2,1fr)}.field{height:180px;min-height:170px}
  h2{font-size:26px;margin-top:2px}.sub{font-size:16px}.desktop-only{display:none}.mobile-only{display:block}
@@ -345,6 +346,20 @@ select:focus,input:focus{border-color:var(--navy)}
   </div>
 </div>
 
+<div id="conversionModal" class="modal" aria-hidden="true">
+  <div class="modal-backdrop"></div>
+  <div class="modal-card conversion-card" role="dialog" aria-modal="true" aria-labelledby="conversionTitle">
+    <div class="modal-head"><strong id="conversionTitle">Touchdown — Choose Conversion</strong></div>
+    <div id="conversionSubtitle" class="muted" style="margin-bottom:14px">Choose the scoring attempt before the kickoff can be logged.</div>
+    <div class="conversion-grid">
+      <button type="button" class="conversion-btn" onclick="completeConversion('Extra Point','Good')"><strong>Extra Point</strong><span>GOOD · +1</span></button>
+      <button type="button" class="conversion-btn" onclick="completeConversion('Extra Point','No Good')"><strong>Extra Point</strong><span>NO GOOD · +0</span></button>
+      <button type="button" class="conversion-btn" onclick="completeConversion('Two Point Conversion','Good')"><strong>2-Point Conversion</strong><span>GOOD · +2</span></button>
+      <button type="button" class="conversion-btn" onclick="completeConversion('Two Point Conversion','No Good')"><strong>2-Point Conversion</strong><span>NO GOOD · +0</span></button>
+    </div>
+  </div>
+</div>
+
 <script>
 const players=[
  {n:"#0",name:"Bryce Graham",pos:"WR, CB"},{n:"#1",name:"Mylan Griggs",pos:"WR, CB"},{n:"#2",name:"De'mari Hendrix",pos:"RB, SB"},
@@ -405,20 +420,15 @@ if(localStorage.getItem("ct_schedule_actual_scores_v1")!=="1"){
 }
 let plays=JSON.parse(localStorage.getItem("ct_plays")||"[]");
 let type="run", startY=15, endY=15, fieldFlipped=false, quarter="1";
-const LIVE_STATE_KEY="ct_live_state_v2";
+let pendingConversion=JSON.parse(localStorage.getItem("ct_pending_conversion")||"null");
 function saveLiveState(){
- const gid=document.getElementById("gameSelect")?.value;
- if(!gid)return;
- const state={gameId:gid,type,startY,endY,fieldFlipped,quarter,possesssion:document.getElementById("possession")?.value||"cass"};
- // Keep the key name simple and tolerate older state written by prior versions.
- state.possession=state.possesssion; delete state.possesssion;
- localStorage.setItem(LIVE_STATE_KEY,JSON.stringify(state));
+ const gid=document.getElementById("gameSelect")?.value || localStorage.getItem("ct_current_game") || "";
+ const possession=document.getElementById("possession")?.value || lastPossession || "cass";
+ const state={gameId:gid,type,startY,endY,fieldFlipped,quarter,possession,page:document.querySelector(".page.active")?.id||"schedule"};
+ localStorage.setItem("ct_live_state",JSON.stringify(state));
+ if(gid) localStorage.setItem("ct_current_game",gid);
 }
-function loadLiveState(){
- try{return JSON.parse(localStorage.getItem(LIVE_STATE_KEY)||"null")}catch(_){return null}
-}
-function clearLiveState(){localStorage.removeItem(LIVE_STATE_KEY)}
-const save=()=>{localStorage.setItem("ct_games",JSON.stringify(games));localStorage.setItem("ct_plays",JSON.stringify(plays));saveLiveState();};
+const save=()=>{localStorage.setItem("ct_games",JSON.stringify(games));localStorage.setItem("ct_plays",JSON.stringify(plays));if(pendingConversion)localStorage.setItem("ct_pending_conversion",JSON.stringify(pendingConversion));else localStorage.removeItem("ct_pending_conversion");saveLiveState();};
 // Yardage is always measured from the offense's perspective.
 // When the field is flipped, the offense is moving toward visual left;
 // otherwise it is moving toward visual right. The same formula applies to
@@ -482,9 +492,7 @@ function renderGameSelect(){
    return 0;
  });
  select.innerHTML=ordered.map(g=>`<option value="${g.id}">${fmtDate(g.date)} — ${g.opp}${g.final?' — FINAL':''}</option>`).join("");
- const saved=loadLiveState();
- const preferred=saved?.gameId || current;
- if(ordered.some(g=>g.id===preferred))select.value=preferred;
+ if(ordered.some(g=>g.id===current))select.value=current;
  updatePossessionOptions();
 }
 function renderField(){
@@ -519,7 +527,7 @@ function renderField(){
  </div>`;
  positionBalls(); enableDrag(document.getElementById("endBall"),false);
 }
-function flipField(){ fieldFlipped=!fieldFlipped; renderField(); saveLiveState(); }
+function flipField(){ fieldFlipped=!fieldFlipped; renderField(); }
 function yardToPct(y){
  const n=Math.max(0,Math.min(100,Number(y)||0));
  const base=10+(n*0.8);
@@ -541,7 +549,6 @@ function setYard(which,value){
   const out=document.getElementById(which+'YardValue');
   if(range) range.value=y; if(out) out.textContent=yardLineLabel(y);
   positionBalls();
-  saveLiveState();
 }
 function adjustYard(which,delta){
   const current=which==='start'?startY:endY;
@@ -671,16 +678,18 @@ function enforceOpeningKickoff(){
 function jumpToField(){ setTimeout(()=>document.querySelector('.field-card')?.scrollIntoView({behavior:'smooth',block:'start'}),40); }
 function syncFieldToLatestPlay(gid){
  const latest=plays.find(p=>p.game===gid);
- if(!latest) return;
+ if(!latest){ enforceOpeningKickoff(); return; }
  if(Number.isFinite(Number(latest.nextStart))){
    startY=Math.max(0,Math.min(100,Number(latest.nextStart)));
    endY=startY;
  }
+ if(typeof latest.nextFieldFlipped==='boolean') fieldFlipped=latest.nextFieldFlipped;
  if(latest.nextPossession){
    const sel=document.getElementById('possession');
    if(sel) sel.value=latest.nextPossession;
    lastPossession=latest.nextPossession;
  }
+ quarter=latest.nextQuarter||latest.q||quarter;
 }
 function controls(){
  const dc=document.getElementById("dynamicControls");
@@ -709,11 +718,12 @@ function controls(){
     : `${rosterPicker("passer","Passer")}<div style="margin-top:12px">${rosterPicker("receiver","Receiver")}</div><div style="margin-top:12px"><label>Pass Result</label><select id="passResult"><option>Complete</option><option>Incomplete</option><option>Interception</option></select></div>`;
  }
  if(type==="special"){
-   dc.innerHTML=`<label>${opp?currentOpponentName()+" Special Teams":"Special Teams Play"}</label><select id="specialType"><option>Punt</option><option>Kickoff</option><option>Field Goal</option><option>Extra Point</option><option>Punt Return</option><option>Kick Return</option><option>Blocked Kick</option></select><div id="specialResultWrap" style="margin-top:12px"></div>`;
+   dc.innerHTML=`<label>${opp?currentOpponentName()+" Special Teams":"Special Teams Play"}</label><select id="specialType"><option>Punt</option><option>Kickoff</option><option>Field Goal</option><option>Extra Point</option><option>Two Point Conversion</option><option>Punt Return</option><option>Kick Return</option><option>Blocked Kick</option></select><div id="specialResultWrap" style="margin-top:12px"></div>`;
    const specialTypeEl=document.getElementById("specialType");
    const renderSpecialResult=()=>{
      const wrap=document.getElementById("specialResultWrap"); if(!wrap)return;
-     wrap.innerHTML=specialTypeEl?.value==="Field Goal" ? `<label>Field Goal Result</label><select id="specialResult"><option>Good</option><option>No Good</option></select>` : "";
+     const st=specialTypeEl?.value;
+     wrap.innerHTML=(st==="Field Goal"||st==="Extra Point"||st==="Two Point Conversion") ? `<label>${st==="Field Goal"?'Field Goal':st==="Extra Point"?'Extra Point':'2-Point Conversion'} Result</label><select id="specialResult"><option>Good</option><option>No Good</option></select>` : "";
      updatePreview();
    };
    specialTypeEl?.addEventListener("change",renderSpecialResult);
@@ -789,6 +799,7 @@ function updatePreview(){
  if(type==="penalty"){let pp=chosenPlayer("penPlayer"), by=selected("penaltyBy")||"cass", dd=currentDownDistance(document.getElementById("gameSelect")?.value);p.innerHTML=`<strong>${dd.down} & ${dd.distance}</strong> · ${by==="opponent"?currentOpponentName():"Cass Tech"} Penalty<br>${selected("penType")||"Select penalty"} · ${by==="opponent"?"Team":(pp?`${pp.n} ${pp.name}`:"Team")} · ${document.getElementById("penYards")?.value||0} yards`; }
 }
 function logPlay(){
+ if(pendingConversion){ openConversionModal(); return; }
  let game=document.getElementById("gameSelect").value,q=quarter;
  const gameObj=games.find(g=>g.id===game);
  if(gameObj?.final){ alert("This game has ended. Stats are locked and no more plays can be logged."); return; }
@@ -806,7 +817,7 @@ function logPlay(){
    return;
  }
  const dd=currentDownDistance(game), down=dd.down, distance=dd.distance;
- let p={id:"p"+Date.now(),game,q,type,side:possession,start:startY,end:endY,yards:endY-startY,defense:[],tacklers:[],touchdown:false,nextStart:startY,nextDown:down,nextDistance:distance};
+ let p={id:"p"+Date.now(),game,q,type,side:possession,start:startY,end:endY,yards:endY-startY,defense:[],tacklers:[],touchdown:false,nextStart:startY,nextDown:down,nextDistance:distance,nextFieldFlipped:fieldFlipped,nextPossession:possession};
  let gain=0, switchPossession=false;
  if(possession==="opponent"){
    if(type==="run"||type==="pass"||type==="special"){
@@ -858,7 +869,19 @@ function logPlay(){
  const extraPointGood=type==="special" && p.special==="Extra Point" && (p.result||"Good")!=="No Good";
  const scoringPlay=!!p.touchdown || fieldGoalGood || extraPointGood;
  if(scoringPlay){
-   p.nextDown=1;p.nextDistance=10;p.nextStart=startY;p.nextPossession=possession;
+   if(p.touchdown){
+     p.nextDown=1;p.nextDistance=10;p.nextStart=35;p.nextPossession=possession;p.nextFieldFlipped=fieldFlipped;
+     plays.unshift(p);
+     pendingConversion={game, q, side:possession, fieldFlipped, scoringTeam:possession};
+     save();
+     type="special";startY=35;endY=35;
+     const possessionEl=document.getElementById("possession"); if(possessionEl)possessionEl.value=possession;
+     lastPossession=possession;
+     controls();renderField();renderPlayLog();renderStats();renderCurrentGame();
+     openConversionModal();
+     return;
+   }
+   p.nextDown=1;p.nextDistance=10;p.nextStart=35;p.nextPossession=possession;p.nextFieldFlipped=fieldFlipped;
    plays.unshift(p);save();
    type="special";startY=35;endY=35;
    const possessionEl=document.getElementById("possession"); if(possessionEl)possessionEl.value=possession;
@@ -867,8 +890,8 @@ function logPlay(){
    renderPlayLog();renderStats();renderCurrentGame();
    setTimeout(()=>document.querySelector("#cg-logstats .controls .type-grid")?.scrollIntoView({behavior:"smooth",block:"start"}),80);
    return;
- } else if(type==="special" && (p.special==="Field Goal" || p.special==="Extra Point")){
-   p.nextDown=1;p.nextDistance=10;p.nextStart=startY;p.nextPossession=possession;
+ } else if(type==="special" && (p.special==="Field Goal" || p.special==="Extra Point" || p.special==="Two Point Conversion")){
+   p.nextDown=1;p.nextDistance=10;p.nextStart=startY;p.nextPossession=possession;p.nextFieldFlipped=fieldFlipped;
    if(p.special==="Field Goal" && p.result==="No Good") switchPossession=true;
  } else if(type==="special" && (p.special==="Kickoff" || p.special==="Punt")){
    // Kicks change possession. The end marker represents the receiving team's
@@ -895,6 +918,7 @@ function logPlay(){
    p.nextDown=1;
    p.nextDistance=10;
    p.nextPossession=receivingPossession;
+   p.nextFieldFlipped=fieldFlipped;
    p.touchback=isTouchback;
 
    save();
@@ -908,11 +932,11 @@ function logPlay(){
    const automaticFirst=penaltyBy!==possession && ["Pass Interference","Personal Foul","Unsportsmanlike Conduct"].includes(p.penalty);
    const nextDistance=automaticFirst ? 10 : (penaltyBy===possession ? distance+py : Math.max(1,distance-py));
    p.start=startY; p.end=acceptedSpot; p.yards=0; p.nextStart=acceptedSpot;
-   p.nextDown=automaticFirst ? 1 : down; p.nextDistance=nextDistance;
+   p.nextDown=automaticFirst ? 1 : down; p.nextDistance=nextDistance; p.nextFieldFlipped=fieldFlipped;
    startY=acceptedSpot; endY=startY;
  } else {
    const ddNext=advanceDownDistance(down,distance,gain);
-   p.nextDown=ddNext.down;p.nextDistance=ddNext.distance;
+   p.nextDown=ddNext.down;p.nextDistance=ddNext.distance;p.nextFieldFlipped=fieldFlipped;
    startY=endY;p.nextStart=startY;endY=startY;
    if(ddNext.turnover){switchPossession=true;}
  }
@@ -921,7 +945,7 @@ function logPlay(){
    plays.unshift(p);save();
    startY=100-endY;endY=startY;fieldFlipped=!fieldFlipped;
    const possessionEl=document.getElementById("possession"); if(possessionEl)possessionEl.value=possession==="cass"?"opponent":"cass";
-   p.nextStart=startY;p.nextDown=1;p.nextDistance=10;p.nextPossession=possessionEl?.value||"cass";
+   p.nextStart=startY;p.nextDown=1;p.nextDistance=10;p.nextPossession=possessionEl?.value||"cass";p.nextFieldFlipped=fieldFlipped;
  } else {
    plays.unshift(p);
  }
@@ -995,7 +1019,7 @@ function editPlay(id){
   }
   if(typ==='special'&&document.getElementById('editSpecialType')){
    const st=document.getElementById('editSpecialType'); st.value=p.special||'Punt';
-   const renderEditSpecialResult=()=>{const w=document.getElementById('editSpecialResultWrap');if(w)w.innerHTML=st.value==='Field Goal'?`<label>Field Goal Result</label><select id="editSpecialResult"><option>Good</option><option>No Good</option></select>`:'';if(st.value==='Field Goal'&&document.getElementById('editSpecialResult'))document.getElementById('editSpecialResult').value=p.result||'Good';};
+   const renderEditSpecialResult=()=>{const w=document.getElementById('editSpecialResultWrap');if(w)w.innerHTML=(st.value==='Field Goal'||st.value==='Extra Point'||st.value==='Two Point Conversion')?`<label>${st.value==='Field Goal'?'Field Goal':st.value==='Extra Point'?'Extra Point':'2-Point Conversion'} Result</label><select id="editSpecialResult"><option>Good</option><option>No Good</option></select>`:'';if(document.getElementById('editSpecialResult'))document.getElementById('editSpecialResult').value=p.result||'Good';};
    st.addEventListener('change',renderEditSpecialResult);renderEditSpecialResult();
   }
   document.querySelectorAll('.edit-tack').forEach(b=>b.onclick=()=>b.classList.toggle('selected'));
@@ -1010,7 +1034,7 @@ function saveEdit(){
  p.q=document.getElementById('editQ').value;p.side=document.getElementById('editSide').value;p.type=document.getElementById('editType').value;p.start=Math.max(0,Math.min(100,Number(p.start)||0));p.end=Math.max(0,Math.min(100,Number(document.getElementById('editEnd').value)||0));p.yards=0;p.touchdown=false;p.defense=[];p.tacklers=[];
  if(p.side==='cass'&&p.type==='run'){p.runner=document.getElementById('editRunner')?.value||'';p.yards=fieldFlipped?p.start-p.end:p.end-p.start;p.touchdown=fieldFlipped?p.end===0:p.end===100;}
  if(p.side==='cass'&&p.type==='pass'){p.passer=document.getElementById('editPasser')?.value||'';p.receiver=document.getElementById('editReceiver')?.value||'';p.result=document.getElementById('editResult')?.value||'Complete';if(p.result==='Complete'){p.yards=fieldFlipped?p.start-p.end:p.end-p.start;p.touchdown=fieldFlipped?p.end===0:p.end===100;}else p.yards=0;}
- if(p.type==='special'){p.player=document.getElementById('editSpecialPlayer')?.value||'';p.special=document.getElementById('editSpecialType')?.value||'Punt';p.result=p.special==='Field Goal'?(document.getElementById('editSpecialResult')?.value||'Good'):'';if(p.special==='Field Goal'||p.special==='Extra Point')p.yards=0;else p.yards=playGain(p.side,p.start,p.end,fieldFlipped);}
+ if(p.type==='special'){p.player=document.getElementById('editSpecialPlayer')?.value||'';p.special=document.getElementById('editSpecialType')?.value||'Punt';p.result=(p.special==='Field Goal'||p.special==='Extra Point'||p.special==='Two Point Conversion')?(document.getElementById('editSpecialResult')?.value||'Good'):'';if(p.special==='Field Goal'||p.special==='Extra Point'||p.special==='Two Point Conversion')p.yards=0;else p.yards=playGain(p.side,p.start,p.end,fieldFlipped);}
  if(p.type==='penalty'){p.player=document.getElementById('editPenPlayer')?.value||'TEAM|Team';p.penalty=document.getElementById('editPenType')?.value||'Holding';p.penYards=Number(document.getElementById('editPenYards')?.value)||0;p.yards=0;}
  if(p.side==='opponent'&&(p.type==='run'||p.type==='pass'||p.type==='special')){p.yards=playGain('opponent',p.start,p.end,fieldFlipped);p.tacklers=[...document.querySelectorAll('.edit-tack.selected')].map(b=>b.dataset.value);p.defense=[...document.querySelectorAll('.edit-def:checked')].map(x=>x.value);}
  save();closeEdit();renderPlayLog();renderStats();renderCurrentGame();
@@ -1090,6 +1114,38 @@ function renderStats(){
  document.getElementById("teamStats").innerHTML=buildTeamStatbook(rows,"Cass Tech","Opponents","Season Team Stats");
 }
 
+function openConversionModal(){
+ const modal=document.getElementById('conversionModal'); if(!modal)return;
+ const game=games.find(g=>g.id===pendingConversion?.game);
+ const team=pendingConversion?.side==='opponent'?(game?.opp||'Opponent'):'Cass Tech';
+ const title=document.getElementById('conversionTitle');
+ const sub=document.getElementById('conversionSubtitle');
+ if(title)title.textContent=`${team} Touchdown — Choose Conversion`;
+ if(sub)sub.textContent='The conversion must be recorded before the kickoff can be logged.';
+ modal.classList.add('open');modal.setAttribute('aria-hidden','false');
+}
+function closeConversionModal(){
+ const modal=document.getElementById('conversionModal'); if(!modal)return;
+ modal.classList.remove('open');modal.setAttribute('aria-hidden','true');
+}
+function completeConversion(special,result){
+ if(!pendingConversion)return;
+ const pc=pendingConversion;
+ const game=games.find(g=>g.id===pc.game);
+ if(!game){pendingConversion=null;save();closeConversionModal();return;}
+ const p={id:'p'+Date.now(),game:pc.game,q:pc.q,type:'special',side:pc.side,start:35,end:35,yards:0,defense:[],tacklers:[],touchdown:false,nextStart:35,nextDown:1,nextDistance:10,nextPossession:pc.side,special,result,conversion:true};
+ plays.unshift(p);
+ pendingConversion=null;
+ save();
+ closeConversionModal();
+ type='special';startY=35;endY=35;
+ const possessionEl=document.getElementById('possession');if(possessionEl)possessionEl.value=pc.side;
+ lastPossession=pc.side;
+ controls();renderField();renderPlayLog();renderStats();renderCurrentGame();
+ const st=document.getElementById('specialType');
+ if(st){st.value='Kickoff';st.dispatchEvent(new Event('change'));}
+ renderField();
+}
 function scoreForGame(gid){
  const arr=plays.filter(p=>p.game===gid);
  let cass=0,opp=0;
@@ -1097,8 +1153,9 @@ function scoreForGame(gid){
  arr.forEach(p=>{
    const side=p.side==='opponent'?'opp':'cass', q=byQ[p.q]||byQ['1']; let pts=0;
    if(p.touchdown) pts=6;
-   else if(p.type==='special' && p.special==='Field Goal' && (p.result||'')!=='Missed') pts=3;
-   else if(p.type==='special' && p.special==='Extra Point' && (p.result||'Good')!=='Missed') pts=1;
+   else if(p.type==='special' && p.special==='Field Goal' && p.result==='Good') pts=3;
+   else if(p.type==='special' && p.special==='Extra Point' && p.result==='Good') pts=1;
+   else if(p.type==='special' && p.special==='Two Point Conversion' && p.result==='Good') pts=2;
    if(pts){ if(side==='cass') cass+=pts; else opp+=pts; q[side]+=pts; }
  });
  return {cass,opp,byQ};
@@ -1117,12 +1174,12 @@ function resetGame(){
    : `Reset ${game.opp||'this game'}? This will clear its score and final status.`;
  if(!window.confirm(msg))return;
  plays=plays.filter(p=>p.game!==gid);
+ if(pendingConversion?.game===gid) pendingConversion=null;
  game.cass=null;
  game.oppScore=null;
  game.final=false;
  delete game.finalAt;
  delete game.finalScore;
- clearLiveState();
  type="special";
  quarter="1";
  fieldFlipped=false;
@@ -1149,7 +1206,6 @@ function endGame(){
  game.final=true;
  game.finalAt=new Date().toISOString();
  save();
- clearLiveState();
  renderSchedule();
  renderCurrentGame();
  controls();
@@ -1187,68 +1243,37 @@ function setCurrentGameTab(tab){
 function syncStartFromGame(){
   const gid=document.getElementById('gameSelect')?.value;
   const latest=plays.find(p=>p.game===gid);
-  const game=games.find(g=>g.id===gid);
   if(latest){
-    startY=Number.isFinite(Number(latest.nextStart)) ? Number(latest.nextStart) : 35;
+    startY=Number.isFinite(Number(latest.nextStart)) ? Number(latest.nextStart) : 15;
     endY=startY;
-    fieldFlipped=!!latest.nextFieldFlipped;
-    if(latest.nextPossession){
-      const sel=document.getElementById('possession');
-      if(sel)sel.value=latest.nextPossession;
-      lastPossession=latest.nextPossession;
-    }
   } else {
     startY=35;
     endY=35;
     fieldFlipped=false;
     type="special";
     document.querySelectorAll(".type-btn").forEach(b=>b.classList.toggle("active",b.dataset.type==="special"));
-    const sel=document.getElementById('possession');
-    if(sel)sel.value=game?.initialPossession||"cass";
-    lastPossession=sel?.value||"cass";
   }
-}
-function restoreLiveState(){
-  const state=loadLiveState();
-  if(!state)return;
-  const game=games.find(g=>g.id===state.gameId);
-  if(!game || game.final){ clearLiveState(); return; }
-  const select=document.getElementById('gameSelect');
-  if(select)select.value=state.gameId;
-  updatePossessionOptions();
-  if(state.possession)document.getElementById('possession').value=state.possession;
-  if(state.type)type=state.type;
-  if(Number.isFinite(Number(state.startY)))startY=Number(state.startY);
-  if(Number.isFinite(Number(state.endY)))endY=Number(state.endY);
-  if(typeof state.fieldFlipped==='boolean')fieldFlipped=state.fieldFlipped;
-  if(state.quarter)quarter=state.quarter;
-  document.querySelectorAll('.type-btn').forEach(b=>b.classList.toggle('active',b.dataset.type===type));
-  lastPossession=document.getElementById('possession')?.value||'cass';
-}
-function hasActiveGame(){
-  const state=loadLiveState();
-  if(state){
-    const g=games.find(x=>x.id===state.gameId);
-    if(g && !g.final)return true;
-  }
-  return games.some(g=>!g.final && plays.some(p=>p.game===g.id));
 }
 function renderQuarterButtons(){
   document.querySelectorAll('.quarter-btn').forEach(b=>b.classList.toggle('active',b.dataset.quarter===quarter));
 }
-function renderAll(){
- renderSchedule();
- renderGameSelect();
- restoreLiveState();
- controls();
- renderField();
- renderPlayLog();
- renderStats();
- renderRoster();
- renderQuarterButtons();
- renderCurrentGame();
- showPage(hasActiveGame()?'log':'schedule');
+function restoreLiveState(){
+ const saved=JSON.parse(localStorage.getItem("ct_live_state")||"null");
+ const unfinished=games.filter(g=>!g.final && (plays.some(p=>p.game===g.id) || pendingConversion?.game===g.id));
+ const active=unfinished.find(g=>g.id===saved?.gameId) || unfinished[0] || null;
+ const sel=document.getElementById("gameSelect");
+ if(sel && active) sel.value=active.id;
+ if(saved && active && saved.gameId===active.id){
+   type=saved.type||type; startY=Number.isFinite(Number(saved.startY))?Number(saved.startY):startY; endY=Number.isFinite(Number(saved.endY))?Number(saved.endY):startY;
+   fieldFlipped=!!saved.fieldFlipped; quarter=saved.quarter||quarter;
+   const pos=document.getElementById("possession"); if(pos && saved.possession) pos.value=saved.possession;
+ } else if(active){
+   syncStartFromGame();
+   syncFieldToLatestPlay(active.id);
+ }
+ return !!active;
 }
+function renderAll(){renderSchedule();renderGameSelect();restoreLiveState();updatePossessionOptions();controls();renderField();renderPlayLog();renderStats();renderRoster();renderQuarterButtons();renderCurrentGame();}
 
 function renderRoster(){
  const box=document.getElementById('rosterGrid');if(!box)return;
@@ -1262,10 +1287,11 @@ function showPage(id){
   document.getElementById(id).classList.add("active");
   if(id==='roster')renderRoster();
   if(id==='log')renderCurrentGame();
+  saveLiveState();
 }
 document.querySelectorAll(".navbtn,.bottom-nav button").forEach(b=>b.onclick=()=>showPage(b.dataset.page));
-document.querySelectorAll(".quarter-btn").forEach(b=>b.onclick=()=>{quarter=b.dataset.quarter;renderQuarterButtons();saveLiveState();});
-document.querySelectorAll(".type-btn").forEach(b=>b.onclick=()=>{document.querySelectorAll(".type-btn").forEach(x=>x.classList.remove("active"));b.classList.add("active");type=b.dataset.type;controls();renderField();saveLiveState();});
+document.querySelectorAll(".quarter-btn").forEach(b=>b.onclick=()=>{quarter=b.dataset.quarter;renderQuarterButtons();});
+document.querySelectorAll(".type-btn").forEach(b=>b.onclick=()=>{document.querySelectorAll(".type-btn").forEach(x=>x.classList.remove("active"));b.classList.add("active");type=b.dataset.type;controls();renderField();});
 document.querySelectorAll('.current-tab').forEach(b=>b.onclick=()=>setCurrentGameTab(b.dataset.cgtab));
 document.querySelectorAll(".tab").forEach(b=>b.onclick=()=>{document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active"));b.classList.add("active");document.getElementById("individualStats").style.display=b.dataset.stab==="individual"?"block":"none";document.getElementById("teamStats").style.display=b.dataset.stab==="team"?"block":"none";});
 document.getElementById("gameSelect").onchange=()=>{
@@ -1290,7 +1316,20 @@ document.getElementById("possession").onchange=()=>{
   controls();renderField();saveLiveState();
 };
 document.addEventListener("change",updatePreview);document.addEventListener("input",updatePreview);
+const hasActiveGame=restoreLiveState();
 renderAll();
+const startupGame=document.getElementById("gameSelect")?.value;
+const startupObj=games.find(g=>g.id===startupGame);
+showPage(hasActiveGame && startupObj && !startupObj.final ? "log" : "schedule");
+if(pendingConversion){
+ const pg=games.find(g=>g.id===pendingConversion.game);
+ if(pg && !pg.final){
+   type='special';startY=35;endY=35;
+   const pos=document.getElementById('possession');if(pos)pos.value=pendingConversion.side;
+   lastPossession=pendingConversion.side;
+   controls();renderField();setTimeout(openConversionModal,60);
+ }else{pendingConversion=null;save();}
+}
 </script>
 </body>
 </html>
