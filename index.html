@@ -653,6 +653,19 @@ function enforceOpeningKickoff(){
  return false;
 }
 function jumpToField(){ setTimeout(()=>document.querySelector('.field-card')?.scrollIntoView({behavior:'smooth',block:'start'}),40); }
+function syncFieldToLatestPlay(gid){
+ const latest=plays.find(p=>p.game===gid);
+ if(!latest) return;
+ if(Number.isFinite(Number(latest.nextStart))){
+   startY=Math.max(0,Math.min(100,Number(latest.nextStart)));
+   endY=startY;
+ }
+ if(latest.nextPossession){
+   const sel=document.getElementById('possession');
+   if(sel) sel.value=latest.nextPossession;
+   lastPossession=latest.nextPossession;
+ }
+}
 function controls(){
  const dc=document.getElementById("dynamicControls");
  clearRosterSelections();
@@ -855,6 +868,7 @@ function logPlay(){
    const receivingPossession=possession==="cass" ? "opponent" : "cass";
    const possessionEl=document.getElementById("possession");
    if(possessionEl) possessionEl.value=receivingPossession;
+   lastPossession=receivingPossession;
 
    // NFHS-style touchback spot: receiving team gets the ball at its 20.
    // Otherwise, convert the physical end spot into the new offense's
@@ -895,7 +909,7 @@ function logPlay(){
  } else {
    plays.unshift(p);
  }
- save();renderPlayLog();renderStats();renderCurrentGame();controls();renderField();
+ save();syncFieldToLatestPlay(game);renderPlayLog();renderStats();renderCurrentGame();controls();renderField();
  setTimeout(()=>document.querySelector("#cg-logstats .controls .type-grid")?.scrollIntoView({behavior:"smooth",block:"start"}),80);
 }
 function renderPlayLog(){
@@ -1013,37 +1027,89 @@ function stats(gameFilter){
 function buildTeamStatbook(rows, leftName, rightName, title){
  const esc=x=>String(x??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
  const calc=side=>{
-  const ps=rows.filter(p=>p.side===side);
-  const scrim=ps.filter(p=>p.type==='run'||p.type==='pass');
-  const runs=ps.filter(p=>p.type==='run');
-  const passes=ps.filter(p=>p.type==='pass');
-  const special=ps.filter(p=>p.type==='special');
-  const pens=ps.filter(p=>p.type==='penalty' && (p.penaltyBy||p.side)===side);
-  const passAtt=passes.length, cmp=passes.filter(p=>p.result==='Complete').length;
-  const passY=passes.reduce((a,p)=>a+(Number(p.yards)||0),0);
-  const rushY=runs.reduce((a,p)=>a+(Number(p.yards)||0),0);
-  const totalY=passY+rushY, totalPlays=scrim.length;
-  const firstDowns=scrim.filter(p=>Number(p.nextDown)===1).length + pens.filter(p=>p.penaltyBy!==side).length;
-  const third= scrim.filter(p=>Number(p.nextDown)===1 && Number(p.down)===3);
-  const fourth= scrim.filter(p=>Number(p.nextDown)===1 && Number(p.down)===4);
-  const td=ps.filter(p=>p.touchdown).length;
-  const fgs=ps.filter(p=>p.type==='special'&&p.special==='Field Goal'&&p.result==='Good').length;
-  const turnovers=passes.filter(p=>p.result==='Interception').length + ps.filter(p=>p.side===side && (p.defense||[]).includes('fr')).length;
-  const penaltyY=pens.reduce((a,p)=>a+(Number(p.penYards)||0),0);
-  return {passAtt,cmp,passY,rushAtt:runs.length,rushY,totalY,totalPlays,firstDowns,third,fourth,td,fgs,turnovers,penaltyY,penalties:pens.length,special};
+   const ps=rows.filter(p=>p.side===side);
+   const scrim=ps.filter(p=>p.type==='run'||p.type==='pass');
+   const runs=ps.filter(p=>p.type==='run');
+   const passes=ps.filter(p=>p.type==='pass');
+   const specials=ps.filter(p=>p.type==='special');
+   const pens=rows.filter(p=>p.type==='penalty' && (p.penaltyBy||p.side)===side);
+   const passAtt=passes.filter(p=>p.result!=='Sack').length;
+   const cmp=passes.filter(p=>p.result==='Complete').length;
+   const passY=passes.reduce((sum,p)=>sum+(Number(p.yards)||0),0);
+   const rushY=runs.reduce((sum,p)=>sum+(Number(p.yards)||0),0);
+   const totalY=passY+rushY;
+   const totalPlays=scrim.length;
+   const firstDownPlays=scrim.filter(p=>Number(p.nextDown)===1);
+   const rushingFirstDowns=runs.filter(p=>Number(p.nextDown)===1).length;
+   const passingFirstDowns=passes.filter(p=>Number(p.nextDown)===1 && p.result==='Complete').length;
+   const penaltyFirstDowns=pens.filter(p=>p.penaltyBy!==side).length;
+   const thirdDowns=scrim.filter(p=>Number(p.down)===3);
+   const fourthDowns=scrim.filter(p=>Number(p.down)===4);
+   const thirdConv=thirdDowns.filter(p=>Number(p.nextDown)===1).length;
+   const fourthConv=fourthDowns.filter(p=>Number(p.nextDown)===1).length;
+   const td=ps.filter(p=>p.touchdown).length;
+   const fgs=specials.filter(p=>p.special==='Field Goal' && p.result==='Good').length;
+   const pats=specials.filter(p=>p.special==='Extra Point' && p.result!=='No Good').length;
+   const sacks=rows.filter(p=>p.side!==side && p.type==='pass' && (p.defense||[]).includes('sack')).length;
+   const sackYards=rows.filter(p=>p.side!==side && p.type==='pass' && (p.defense||[]).includes('sack')).reduce((sum,p)=>sum+Math.abs(Math.min(0,Number(p.yards)||0)),0);
+   const intThrown=passes.filter(p=>p.result==='Interception').length;
+   const fumblesLost=ps.filter(p=>(p.defense||[]).includes('fr')).length;
+   const penaltyY=pens.reduce((sum,p)=>sum+(Number(p.penYards)||0),0);
+   return {
+     passAtt,cmp,passY,rushAtt:runs.length,rushY,totalY,totalPlays,
+     firstDowns:firstDownPlays.length+penaltyFirstDowns,
+     rushingFirstDowns,passingFirstDowns,penaltyFirstDowns,
+     thirdAttempts:thirdDowns.length,thirdConv,fourthAttempts:fourthDowns.length,fourthConv,
+     td,fgs,pats,intThrown,sacks,sackYards,fumblesLost,penaltyY,penalties:pens.length
+   };
  };
  const L=calc('cass'), R=calc('opponent');
- const fmtEff=(x)=>x.length?`${x.filter(p=>Number(p.nextDown)===1).length}-${x.length}`:'0-0';
- const val=(a,b,decimals=false)=>`${decimals?(a.totalPlays?(a.totalY/a.totalPlays).toFixed(1):'0.0'):a}||${decimals?(b.totalPlays?(b.totalY/b.totalPlays).toFixed(1):'0.0'):b}`;
+ const eff=(made,att)=>att?`${made}-${att}`:'0-0';
  const row=(label,a,b,cls='')=>`<div class="team-stat-row ${cls}"><div class="team-stat-label">${label}</div><div>${a}</div><div>${b}</div></div>`;
  const section=(label,content)=>`<div class="team-stat-section"><div class="team-stat-section-title">${label}</div>${content}</div>`;
- return `<div class="team-statbook"><div class="team-statbook-title">${esc(title||'Team Stats')}</div><div class="team-stat-head"><div></div><strong>${esc(leftName)}</strong><strong>${esc(rightName)}</strong></div>
- ${section('First Downs',row('Total 1st Downs',L.firstDowns,R.firstDowns)+row('Rushing 1st Downs',L.runs.filter(p=>Number(p.nextDown)===1).length,R.runs.filter(p=>Number(p.nextDown)===1).length)+row('Passing 1st Downs',L.passes.filter(p=>Number(p.nextDown)===1).length,R.passes.filter(p=>Number(p.nextDown)===1).length)+row('3rd Down Efficiency',fmtEff(L.third),fmtEff(R.third))+row('4th Down Efficiency',fmtEff(L.fourth),fmtEff(R.fourth)))}
- ${section('Total Offense',row('Total Plays',L.totalPlays,R.totalPlays)+row('Total Yards',L.totalY,R.totalY)+row('Yards per Play',L.totalPlays?(L.totalY/L.totalPlays).toFixed(1):'0.0',R.totalPlays?(R.totalY/R.totalPlays).toFixed(1):'0.0')+row('Touchdowns',L.td,R.td))}
- ${section('Passing',row('Passing Yards',L.passY,R.passY)+row('Comp / Att',`${L.cmp} / ${L.passAtt}`,`${R.cmp} / ${R.passAtt}`)+row('Yards per Pass',L.passAtt?(L.passY/L.passAtt).toFixed(1):'0.0',R.passAtt?(R.passY/R.passAtt).toFixed(1):'0.0')+row('Interceptions Thrown',L.turnovers,R.turnovers))}
- ${section('Rushing',row('Rushing Yards',L.rushY,R.rushY)+row('Rushing Attempts',L.rushAtt,R.rushAtt)+row('Yards per Rush',L.rushAtt?(L.rushY/L.rushAtt).toFixed(1):'0.0',R.rushAtt?(R.rushY/R.rushAtt).toFixed(1):'0.0'))}
- ${section('Penalties',row('Penalties',L.penalties,R.penalties)+row('Penalty Yards',L.penaltyY,R.penaltyY))}
- ${section('Scoring',row('Touchdowns',L.td,R.td)+row('Field Goals',L.fgs,R.fgs))}
+ const drives=side=>{
+   let n=0,had=false;
+   rows.slice().sort((a,b)=>(Number(b.id?.slice(1))||0)-(Number(a.id?.slice(1))||0)).forEach(()=>{});
+   const chronological=rows.slice().reverse();
+   chronological.forEach(p=>{
+     if(p.side===side && !had && (p.type==='run'||p.type==='pass'||p.type==='special')){ n++; had=true; }
+     const possessionChanged=p.nextPossession && p.nextPossession!==side;
+     if(possessionChanged) had=false;
+   });
+   return n;
+ };
+ const LD=drives('cass'), RD=drives('opponent');
+ return `<div class="team-statbook">
+   <div class="team-statbook-title">${esc(title||'Team Stats')}</div>
+   <div class="team-stat-head"><div> </div><strong>${esc(leftName)}</strong><strong>${esc(rightName)}</strong></div>
+   ${section('First Downs',
+     row('Total 1st Downs',L.firstDowns,R.firstDowns)+
+     row('Rushing 1st Downs',L.rushingFirstDowns,R.rushingFirstDowns)+
+     row('Passing 1st Downs',L.passingFirstDowns,R.passingFirstDowns)+
+     row('1st Downs from Penalties',L.penaltyFirstDowns,R.penaltyFirstDowns)+
+     row('3rd Down Efficiency',eff(L.thirdConv,L.thirdAttempts),eff(R.thirdConv,R.thirdAttempts))+
+     row('4th Down Efficiency',eff(L.fourthConv,L.fourthAttempts),eff(R.fourthConv,R.fourthAttempts))
+   )}
+   ${section('Total Offense',
+     row('Total Plays',L.totalPlays,R.totalPlays)+
+     row('Total Yards',L.totalY,R.totalY)+
+     row('Total Drives',LD,RD)+
+     row('Yards per Play',L.totalPlays?(L.totalY/L.totalPlays).toFixed(1):'0.0',R.totalPlays?(R.totalY/R.totalPlays).toFixed(1):'0.0')
+   )}
+   ${section('Passing',
+     row('Passing Yards',L.passY,R.passY)+
+     row('Comp / Att',`${L.cmp}/${L.passAtt}`,`${R.cmp}/${R.passAtt}`)+
+     row('Yards per Pass',L.passAtt?(L.passY/L.passAtt).toFixed(1):'0.0',R.passAtt?(R.passY/R.passAtt).toFixed(1):'0.0')+
+     row('Interceptions Thrown',L.intThrown,R.intThrown)+
+     row('Sacks - Yards Lost',`${L.sacks}-${L.sackYards}`,`${R.sacks}-${R.sackYards}`)
+   )}
+   ${section('Rushing',
+     row('Rushing Yards',L.rushY,R.rushY)+
+     row('Rushing Attempts',L.rushAtt,R.rushAtt)+
+     row('Yards per Rush',L.rushAtt?(L.rushY/L.rushAtt).toFixed(1):'0.0',R.rushAtt?(R.rushY/R.rushAtt).toFixed(1):'0.0')
+   )}
+   ${section('Penalties',row('Penalties',L.penalties,R.penalties)+row('Penalty Yards',L.penaltyY,R.penaltyY))}
+   ${section('Scoring',row('Touchdowns',L.td,R.td)+row('Field Goals',L.fgs,R.fgs)+row('Extra Points',L.pats,R.pats))}
  </div>`;
 }
 function renderStats(){
