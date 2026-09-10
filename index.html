@@ -176,6 +176,32 @@ select:focus,input:focus{border-color:var(--navy)}
 .field-log-btn{margin-top:8px}
 .modal-card{display:flex;flex-direction:column;overflow:hidden}
 #editForm{overflow-y:auto;overflow-x:hidden;min-height:0;flex:1;padding-bottom:10px}
+/* Conversion chooser is a compact true modal on every screen size. */
+#conversionModal .modal-card{
+  width:min(430px,calc(100vw - 24px));
+  max-width:min(430px,calc(100vw - 24px));
+  max-height:none;
+  height:auto;
+  padding:20px;
+}
+#conversionModal .modal-head{margin-bottom:8px}
+#conversionModal .conversion-note{margin-bottom:16px}
+#conversionModal #conversionButtons{grid-template-columns:1fr 1fr;gap:9px;margin-bottom:0}
+#conversionModal #conversionButtons .btn{min-height:54px;padding:10px 8px}
+@media(max-width:800px){
+  #conversionModal .modal-card{
+    position:fixed!important;
+    left:50%!important;top:50%!important;right:auto!important;bottom:auto!important;
+    transform:translate(-50%,-50%)!important;
+    width:calc(100vw - 24px)!important;
+    max-width:430px!important;
+    height:auto!important;
+    max-height:none!important;
+    border-radius:16px!important;
+    padding:18px!important;
+  }
+}
+
 @media(max-width:800px){
   html,body{overflow-x:hidden!important;max-width:100vw}
   .topbar,.brand,main,.page,.card,.play-layout,.field-card,.controls{max-width:100%;min-width:0}
@@ -340,7 +366,7 @@ select:focus,input:focus{border-color:var(--navy)}
   <div class="modal-backdrop"></div>
   <div class="modal-card" style="max-width:520px">
     <div class="modal-head"><strong>Touchdown — Choose Conversion</strong></div>
-    <div class="muted" style="margin-bottom:14px">A conversion must be recorded before the next play.</div>
+    <div class="muted conversion-note">A conversion must be recorded before the next play.</div>
     <div id="conversionButtons" class="type-grid" style="grid-template-columns:1fr 1fr"></div>
   </div>
 </div>
@@ -810,7 +836,11 @@ function completeConversion(id,label,points){
  const modal=document.getElementById("conversionModal"); if(modal){modal.classList.remove("open");modal.setAttribute("aria-hidden","true");}
  type="special";startY=35;endY=35;fieldFlipped=false;lastPossession=side;kickoffRequired=true;
  const possessionEl=document.getElementById("possession"); if(possessionEl) possessionEl.value=side;
- save();controls();renderField();renderPlayLog();renderStats();renderCurrentGame();
+ save();
+ // A conversion is part of the Current Game workflow. Always return the user to that tab.
+ showPage("log");
+ setCurrentGameTab("logstats");
+ controls();renderField();renderPlayLog();renderStats();renderCurrentGame();
  setTimeout(()=>document.querySelector("#cg-logstats .controls .type-grid")?.scrollIntoView({behavior:"smooth",block:"start"}),80);
 }
 function logPlay(){
