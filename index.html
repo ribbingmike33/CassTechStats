@@ -442,34 +442,67 @@ let type="run", startY=15, endY=15, fieldFlipped=false, quarter="1";
 let pendingConversion=JSON.parse(localStorage.getItem("ct_pending_conversion")||"null");
 let kickoffRequired=localStorage.getItem("ct_kickoff_required")==="1";
 let lastPossession=localStorage.getItem("ct_last_possession")||"cass";
+// The field is always displayed from the fixed spectator perspective:
+// Cass Tech goal line on the left, opponent goal line on the right.
+// Possession changes never flip the visual field.
+fieldFlipped=false;
+localStorage.setItem("ct_fixed_spectator_perspective_v1","1");
 const saveLiveState=()=>{
   localStorage.setItem("ct_live_state",JSON.stringify({gameId:document.getElementById("gameSelect")?.value||null,type,startY,endY,fieldFlipped,quarter,lastPossession,pendingConversion,kickoffRequired}));
   localStorage.setItem("ct_pending_conversion",JSON.stringify(pendingConversion));
   localStorage.setItem("ct_kickoff_required",kickoffRequired?"1":"0");
 };
 const save=()=>{localStorage.setItem("ct_games",JSON.stringify(games));localStorage.setItem("ct_plays",JSON.stringify(plays));saveLiveState();};
-// Restore the in-progress game state after a refresh/reopen.
-try{
- const ls=JSON.parse(localStorage.getItem("ct_live_state")||"null");
- if(ls){
-   if(ls.type) type=ls.type; if(Number.isFinite(Number(ls.startY))) startY=Number(ls.startY); if(Number.isFinite(Number(ls.endY))) endY=Number(ls.endY);
-   if(typeof ls.fieldFlipped==='boolean') fieldFlipped=ls.fieldFlipped; if(ls.quarter) quarter=ls.quarter;
-   if(ls.lastPossession) lastPossession=ls.lastPossession; if(ls.pendingConversion) pendingConversion=ls.pendingConversion; if(typeof ls.kickoffRequired==='boolean') kickoffRequired=ls.kickoffRequired;
- }
-}catch(_){ }
-// Normalize persisted state against the actual latest play. Older builds could
-// leave the UI on Special Teams after a possession change or leave a stale
-// kickoff flag in localStorage. The play log is the source of truth.
-try{
- const gid=document.getElementById("gameSelect")?.value;
- const latest=plays.find(p=>p.game===gid);
- if(latest){
-   if(latest.special==="Kickoff") kickoffRequired=false;
-   if(latest.nextPossession && !pendingConversion && !kickoffRequired) type="run";
-   if(latest.nextPossession) lastPossession=latest.nextPossession;
-   fieldFlipped=lastPossession==="opponent";
- }
-}catch(_){ }
+// Restore the in-progress game state after the game selector has been rendered.
+// The selector does not exist until renderGameSelect(), so restoration must happen
+// after the initial render; otherwise a refresh silently falls back to the first game.
+function restoreLiveState(){
+  let restoredGameId=null;
+  try{
+    const ls=JSON.parse(localStorage.getItem("ct_live_state")||"null");
+    if(ls){
+      restoredGameId=ls.gameId||null;
+      if(ls.type) type=ls.type;
+      if(Number.isFinite(Number(ls.startY))) startY=Number(ls.startY);
+      if(Number.isFinite(Number(ls.endY))) endY=Number(ls.endY);
+      fieldFlipped=false;
+      if(ls.quarter) quarter=ls.quarter;
+      if(ls.lastPossession) lastPossession=ls.lastPossession;
+      if(ls.pendingConversion) pendingConversion=ls.pendingConversion;
+      if(typeof ls.kickoffRequired==='boolean') kickoffRequired=ls.kickoffRequired;
+    }
+  }catch(_){ }
+
+  const gameSelect=document.getElementById("gameSelect");
+  if(restoredGameId && gameSelect && games.some(g=>g.id===restoredGameId)){
+    gameSelect.value=restoredGameId;
+  }
+
+  // The play log is the source of truth for the current drive. Rebuild the
+  // starting spot, possession, and play type from its latest play rather than
+  // trusting stale UI state from an older build.
+  const gid=gameSelect?.value;
+  const latest=gid?plays.find(p=>p.game===gid):null;
+  if(latest){
+    if(Number.isFinite(Number(latest.nextStart))) startY=Number(latest.nextStart);
+    endY=startY;
+    if(latest.nextPossession) lastPossession=latest.nextPossession;
+    if(latest.special==="Kickoff") kickoffRequired=false;
+    if(latest.nextPossession && !pendingConversion && !kickoffRequired) type="run";
+  }else if(gid){
+    startY=35; endY=35; lastPossession="cass"; kickoffRequired=false;
+    pendingConversion=null; type="special";
+  }
+  fieldFlipped=false;
+
+  if(gameSelect){
+    updatePossessionOptions();
+    const possession=document.getElementById("possession");
+    if(possession) possession.value=lastPossession;
+  }
+  saveLiveState();
+}
+
 // Absolute field coordinate: 0 = Cass Tech goal line, 50 = midfield, 100 = opponent goal line.
 function playGain(side,start,end){
  const a=Number(start)||0,b=Number(end)||0;
@@ -529,7 +562,7 @@ function renderGameSelect(){
 }
 function syncFieldPerspective(){
   const possession=document.getElementById("possession")?.value||lastPossession||"cass";
-  fieldFlipped=possession==="opponent";
+  fieldFlipped=false;
   return possession;
 }
 function renderField(){
@@ -539,7 +572,7 @@ function renderField(){
    field.innerHTML='<div class="empty" style="height:100%;display:grid;place-items:center"><div><strong>Penalty selected</strong><br><span class="muted">Penalties do not require field placement.</span></div></div>';
    return;
  }
- const leftIsCass=!fieldFlipped;
+ const leftIsCass=true;
  const labels=[10,20,30,40,50,40,30,20,10];
  const labelPositions=[18,26,34,42,50,58,66,74,82];
  field.innerHTML=`<div class="field-wrap">
@@ -555,7 +588,7 @@ function renderField(){
    </div>
    <div class="yard-control">
      <div class="yard-control-head"><strong>End Yard Line</strong><span class="yard-value" id="endYardValue">${yardLineLabel(endY)}</span></div>
-     <input class="yard-range" id="endYardRange" type="range" min="0" max="100" step="1" value="${fieldFlipped?100-endY:endY}" oninput="setYardFromSlider(this.value)">
+     <input class="yard-range" id="endYardRange" type="range" min="0" max="100" step="1" value="${endY}" oninput="setYardFromSlider(this.value)">
      <div class="yard-ticks"><span>0</span><span>10</span><span>20</span><span>30</span><span>40</span><span>50</span><span>40</span><span>30</span><span>20</span><span>10</span><span>0</span></div>
      <div class="yard-buttons"><button type="button" onclick="adjustYard('end',5)">+5</button><button type="button" onclick="adjustYard('end',1)">+1</button><button type="button" onclick="adjustYard('end',-1)">−1</button><button type="button" onclick="adjustYard('end',-5)">−5</button></div>
    </div>
@@ -564,14 +597,11 @@ function renderField(){
  positionBalls(); enableDrag(document.getElementById("endBall"),false);
 }
 function yardToPct(y){
- syncFieldPerspective();
  const n=Math.max(0,Math.min(100,Number(y)||0));
- const base=10+(n*0.8);
- return fieldFlipped ? 100-base : base;
+ return 10+(n*0.8);
 }
 function pctToY(p){
- syncFieldPerspective();
- const visual=fieldFlipped ? 100-Number(p) : Number(p);
+ const visual=Math.max(0,Math.min(100,Number(p)||0));
  return Math.max(0,Math.min(100,Math.round((visual-10)/0.8)));
 }
 function yardLineLabel(y){
@@ -585,13 +615,13 @@ function setYard(which,value){
   endY=y;
   const range=document.getElementById('endYardRange');
   const out=document.getElementById('endYardValue');
-  if(range) range.value=fieldFlipped?100-y:y;
+  if(range) range.value=y;
   if(out) out.textContent=yardLineLabel(y);
   saveLiveState(); positionBalls();
 }
 function setYardFromSlider(value){
   const visual=Math.max(0,Math.min(100,Number(value)||0));
-  setYard('end',fieldFlipped?100-visual:visual);
+  setYard('end',visual);
 }
 function adjustYard(which,delta){
   if(which==='start') return;
@@ -740,7 +770,7 @@ function syncFieldToLatestPlay(gid){
    if(sel) sel.value=next;
    lastPossession=next;
    // Orientation is visual only; the stored field coordinate never flips.
-   fieldFlipped=next==='opponent';
+   fieldFlipped=false;
    // Possession changes begin a normal scrimmage sequence unless a scoring
    // event explicitly left a kickoff pending.
    if(!kickoffRequired && !pendingConversion) setPlayType('run');
@@ -983,7 +1013,7 @@ function logPlay(){
    lastPossession=next;const pe=document.getElementById("possession");if(pe)pe.value=next;
    // Keep the visual field direction aligned with the new offense. This is
    // display-only; absolute field coordinates and yardage never depend on it.
-   fieldFlipped=next==='opponent';
+   fieldFlipped=false;
    setPlayType('run');
    startY=Number.isFinite(Number(p.nextStart))?Number(p.nextStart):endY;endY=startY;
  }else{startY=p.nextStart;endY=startY;}
@@ -1248,7 +1278,7 @@ function syncStartFromGame(){
     // leaves the next play on Special Teams.
     if(latest.special==='Kickoff') kickoffRequired=false;
     if(latest.nextPossession && !pendingConversion && !kickoffRequired) setPlayType('run');
-    fieldFlipped=lastPossession==='opponent';
+    fieldFlipped=false;
   }else{
     startY=35;
     endY=35;
@@ -1300,13 +1330,20 @@ document.getElementById("possession").onchange=()=>{
   lastPossession=next;
   // Keep the field visually oriented toward the current offense.
   // Yardage calculations remain independent of this display flag.
-  fieldFlipped=next==='opponent';
+  fieldFlipped=false;
   if(!kickoffRequired && !pendingConversion) setPlayType('run');
   saveLiveState();
   controls();renderField();
 };
 document.addEventListener("change",updatePreview);document.addEventListener("input",updatePreview);
 renderAll();
+restoreLiveState();
+renderQuarterButtons();
+controls();
+renderField();
+renderPlayLog();
+renderStats();
+renderCurrentGame();
 if(pendingConversion) setTimeout(()=>showConversionPopup(pendingConversion.side),50);
 </script>
 <footer id="refreshTime" style="text-align:center;padding:18px 12px 28px;color:#6b7280;font-size:12px;border-top:1px solid #e5e7eb;margin-top:28px;">Refresh Time: <strong>September 10, 2026 12:50:22 AM EDT</strong></footer>
