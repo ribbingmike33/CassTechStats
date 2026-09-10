@@ -679,10 +679,11 @@ function jumpToField(){ setTimeout(()=>document.querySelector('.field-card')?.sc
 function syncFieldToLatestPlay(gid){
  const latest=plays.find(p=>p.game===gid);
  if(!latest){ enforceOpeningKickoff(); return; }
- if(Number.isFinite(Number(latest.nextStart))){
-   startY=Math.max(0,Math.min(100,Number(latest.nextStart)));
-   endY=startY;
- }
+ // The latest play is the authoritative source for the NEXT snap. Never leave
+ // the field using stale in-memory coordinates after a play is logged.
+ const ns=Number(latest.nextStart);
+ startY=Number.isFinite(ns)?Math.max(0,Math.min(100,ns)):35;
+ endY=startY;
  if(typeof latest.nextFieldFlipped==='boolean') fieldFlipped=latest.nextFieldFlipped;
  if(latest.nextPossession){
    const sel=document.getElementById('possession');
@@ -690,6 +691,20 @@ function syncFieldToLatestPlay(gid){
    lastPossession=latest.nextPossession;
  }
  quarter=latest.nextQuarter||latest.q||quarter;
+}
+
+// Single post-play render path. Every logged play must flow through this so the
+// persisted play state and the visible field can never get out of sync.
+function finishLoggedPlay(gid){
+ syncFieldToLatestPlay(gid);
+ updatePossessionOptions();
+ controls();
+ renderField();
+ renderPlayLog();
+ renderStats();
+ renderCurrentGame();
+ saveLiveState();
+ setTimeout(()=>document.querySelector('#cg-logstats .controls .type-grid')?.scrollIntoView({behavior:'smooth',block:'start'}),80);
 }
 function controls(){
  const dc=document.getElementById("dynamicControls");
@@ -876,24 +891,24 @@ function logPlay(){
  if(p.safety){
    const scorer=side==="cass"?"opponent":"cass";
    p.points=2;p.scoringTeam=scorer;p.nextDown=1;p.nextDistance=10;p.nextStart=35;p.nextPossession=side;p.nextFieldFlipped=fieldFlipped;p.nextFreeKick=true;
-   plays.unshift(p);save();
+   plays.unshift(p);
    type="special";startY=35;endY=35;document.getElementById("possession").value=side;lastPossession=side;
-   controls();renderField();renderPlayLog();renderStats();renderCurrentGame();
-   setTimeout(()=>document.querySelector("#cg-logstats .controls .type-grid")?.scrollIntoView({behavior:"smooth",block:"start"}),80);return;
+   finishLoggedPlay(game);return;
  }
 
  // TD: six points, then mandatory conversion modal.
  if(p.touchdown){
    p.points=6;p.scoringTeam=side;setNext(35,1,10,side,fieldFlipped);
-   plays.unshift(p);pendingConversion={game,q,side,fieldFlipped,scoringTeam:side};save();
+   plays.unshift(p);pendingConversion={game,q,side,fieldFlipped,scoringTeam:side};
    type="special";startY=35;endY=35;document.getElementById("possession").value=side;lastPossession=side;
-   controls();renderField();renderPlayLog();renderStats();renderCurrentGame();openConversionModal();return;
+   finishLoggedPlay(game);openConversionModal();return;
  }
 
  // Field-goal scoring or successful conversion. A successful FG is followed by a kickoff.
  if((p.special==="Field Goal"&&p.result==="Good") || (p.special==="Extra Point"&&p.result==="Good") || (p.special==="Two Point Conversion"&&p.result==="Good")){
-   p.points=p.special==="Field Goal"?3:p.special==="Extra Point"?1:2;p.scoringTeam=side;setNext(35,1,10,side,fieldFlipped);plays.unshift(p);save();
-   type="special";startY=35;endY=35;document.getElementById("possession").value=side;lastPossession=side;controls();renderField();renderPlayLog();renderStats();renderCurrentGame();
+   p.points=p.special==="Field Goal"?3:p.special==="Extra Point"?1:2;p.scoringTeam=side;setNext(35,1,10,side,fieldFlipped);plays.unshift(p);
+   type="special";startY=35;endY=35;document.getElementById("possession").value=side;lastPossession=side;
+   finishLoggedPlay(game);
    const st=document.getElementById("specialType");if(st){st.value="Kickoff";st.dispatchEvent(new Event("change"));}return;
  }
 
@@ -922,7 +937,7 @@ function logPlay(){
    }
    if(receivingGetsBall){fieldFlipped=!fieldFlipped;setNext(spot,1,10,receiving,fieldFlipped);startY=spot;endY=spot;document.getElementById("possession").value=receiving;lastPossession=receiving;}
    else {fieldFlipped=!fieldFlipped;setNext(spot,1,10,side,fieldFlipped);startY=spot;endY=spot;document.getElementById("possession").value=side;lastPossession=side;}
-   plays.unshift(p);save();controls();renderField();renderPlayLog();renderStats();renderCurrentGame();setTimeout(()=>document.querySelector("#cg-logstats .controls .type-grid")?.scrollIntoView({behavior:"smooth",block:"start"}),80);return;
+   plays.unshift(p);finishLoggedPlay(game);return;
  }
 
  // Fumble / interception / turnover on downs / missed FG possession handling.
@@ -956,8 +971,7 @@ function logPlay(){
    const next=advanceDownDistance(down,distance,gain);p.nextDown=next.down;p.nextDistance=next.distance;p.nextStart=endY;p.nextFieldFlipped=fieldFlipped;p.nextPossession=side;startY=endY;endY=startY;
    if(next.turnover){const np=side==="cass"?"opponent":"cass";fieldFlipped=!fieldFlipped;const ns=100-startY;p.nextStart=ns;p.nextDown=1;p.nextDistance=10;p.nextPossession=np;p.nextFieldFlipped=fieldFlipped;startY=ns;endY=ns;document.getElementById("possession").value=np;lastPossession=np;}
  }
- plays.unshift(p);save();controls();renderField();renderPlayLog();renderStats();renderCurrentGame();
- setTimeout(()=>document.querySelector("#cg-logstats .controls .type-grid")?.scrollIntoView({behavior:"smooth",block:"start"}),80);
+ plays.unshift(p);finishLoggedPlay(game);
 }
 function closeEdit(){document.getElementById('editModal').classList.remove('open');document.getElementById('editModal').setAttribute('aria-hidden','true');window.editingPlayId=null;}
 function saveEdit(){
@@ -1067,12 +1081,11 @@ function completeConversion(special,result){
  const p={id:'p'+Date.now(),game:pc.game,q:pc.q,type:'special',side:pc.side,start:35,end:35,yards:0,defense:[],tacklers:[],touchdown:false,nextStart:35,nextDown:1,nextDistance:10,nextPossession:pc.side,special,result,conversion:true};
  plays.unshift(p);
  pendingConversion=null;
- save();
  closeConversionModal();
  type='special';startY=35;endY=35;
  const possessionEl=document.getElementById('possession');if(possessionEl)possessionEl.value=pc.side;
  lastPossession=pc.side;
- controls();renderField();renderPlayLog();renderStats();renderCurrentGame();
+ finishLoggedPlay(pc.game);
  const st=document.getElementById('specialType');
  if(st){st.value='Kickoff';st.dispatchEvent(new Event('change'));}
  renderField();
